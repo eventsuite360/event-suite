@@ -1,4 +1,3 @@
-import { crypto } from 'next/dist/compiled/@edge-runtime/primitives';
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 
@@ -13,17 +12,26 @@ export interface SessionData {
   canAccessExpenseRevenue?: boolean;
 }
 
+function getWebCrypto(): Crypto {
+  if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.subtle) {
+    return globalThis.crypto;
+  }
+  // Fallback for Node.js environments
+  return (require('node:crypto') as any).webcrypto;
+}
+
 // Generate HMAC token for session
 async function createToken(payload: string): Promise<string> {
+  const webCrypto = getWebCrypto();
   const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
+  const key = await webCrypto.subtle.importKey(
     'raw',
     encoder.encode(SECRET),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
   );
-  const signature = await crypto.subtle.sign(
+  const signature = await webCrypto.subtle.sign(
     'HMAC',
     key,
     encoder.encode(payload)

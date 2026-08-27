@@ -8,6 +8,8 @@ export function getPgClient() {
     });
   }
 
+  console.warn('[DB Warning] POSTGRES_URL environment variable is not defined. Falling back to default Supabase host.');
+
   const user = 'postgres';
   const password = 'n@gYV/k8Wqf3e!=';
   const host = 'db.bskmtfanhwsvzacprhos.supabase.co';

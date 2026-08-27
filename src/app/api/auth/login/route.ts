@@ -79,7 +79,15 @@ export async function POST(req: NextRequest) {
       { status: 401 }
     );
   } catch (err: any) {
-    console.error('[API /api/auth/login Error]:', err);
+    console.error('[API /api/auth/login Error Message]:', err?.message || err);
+    console.error('[API /api/auth/login Error Stack]:', err?.stack || 'No stack trace');
+    if (err && typeof err === 'object') {
+      try {
+        console.error('[API /api/auth/login Error Details]:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
+      } catch {
+        // ignore stringification errors
+      }
+    }
     return NextResponse.json(
       { error: 'An unexpected error occurred during login.' },
       { status: 500 }
