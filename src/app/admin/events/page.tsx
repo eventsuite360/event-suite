@@ -14,6 +14,7 @@ import { Card } from '@/components/ui/Card';
 export default function AdminEventsPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -42,16 +43,21 @@ export default function AdminEventsPage() {
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const res = await fetch('/api/admin/events');
       const data = await res.json();
       if (res.ok) {
         setEvents(data.events || []);
       } else {
-        console.error('Error fetching events:', data.error);
+        const errorMsg = data.error || `HTTP ${res.status} error fetching events`;
+        console.error('[AdminEventsPage] Error fetching events:', errorMsg);
+        setFetchError(errorMsg);
       }
     } catch (err: any) {
-      console.error('Error fetching events:', err.message);
+      const errorMsg = err.message || 'Failed to connect to API server';
+      console.error('[AdminEventsPage] Error fetching events:', errorMsg);
+      setFetchError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -300,6 +306,17 @@ export default function AdminEventsPage() {
           <div className="py-16 text-center text-zinc-400 text-sm">
             <div className="inline-block animate-spin w-6 h-6 border-2 border-black border-t-transparent rounded-full mb-3" />
             <p>Loading events...</p>
+          </div>
+        ) : fetchError ? (
+          <div className="py-16 text-center text-zinc-500 px-4">
+            <AlertTriangle className="w-12 h-12 mx-auto text-zinc-400 mb-3" />
+            <p className="font-semibold text-zinc-900 text-base">Error Loading Events</p>
+            <p className="text-xs text-zinc-800 font-mono mt-2 max-w-md mx-auto bg-zinc-100 p-2.5 rounded-lg border border-zinc-300">
+              {fetchError}
+            </p>
+            <p className="text-xs text-zinc-500 mt-3">
+              If unauthorized, please log in again. If a database error occurred, check server logs.
+            </p>
           </div>
         ) : filteredEvents.length === 0 ? (
           <div className="py-16 text-center text-zinc-500">

@@ -6,6 +6,7 @@ import { getPgClient } from '@/lib/db';
 // GET /api/admin/events - List all events including credentials
 export async function GET() {
   if (!(await isServerAdminAuthenticated())) {
+    console.warn('[API /api/admin/events GET Warning]: Request unauthenticated (no valid session cookie).');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -26,18 +27,32 @@ export async function GET() {
       FROM public.events
       ORDER BY created_at DESC
     `);
+    console.log(`[API /api/admin/events GET Success]: Retracted ${result.rows.length} events from DB.`);
     return NextResponse.json({ events: result.rows });
   } catch (err: any) {
-    console.error('[API /api/admin/events GET Error]:', err);
+    console.error('[API /api/admin/events GET Error Message]:', err?.message || err);
+    console.error('[API /api/admin/events GET Error Stack]:', err?.stack || 'No stack trace');
+    if (err && typeof err === 'object') {
+      try {
+        console.error('[API /api/admin/events GET Error Details]:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
+      } catch {
+        // ignore
+      }
+    }
     return NextResponse.json({ error: err.message }, { status: 500 });
   } finally {
-    await client.end();
+    try {
+      await client.end();
+    } catch {
+      // ignore
+    }
   }
 }
 
 // POST /api/admin/events - Create new event with short permanent credentials
 export async function POST(req: NextRequest) {
   if (!(await isServerAdminAuthenticated())) {
+    console.warn('[API /api/admin/events POST Warning]: Request unauthenticated.');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -103,7 +118,8 @@ export async function POST(req: NextRequest) {
       await client.end();
     }
   } catch (err: any) {
-    console.error('[API /api/admin/events POST Error]:', err);
+    console.error('[API /api/admin/events POST Error Message]:', err?.message || err);
+    console.error('[API /api/admin/events POST Error Stack]:', err?.stack || 'No stack trace');
     return NextResponse.json({ error: err.message || 'Failed to create event' }, { status: 500 });
   }
 }
@@ -111,6 +127,7 @@ export async function POST(req: NextRequest) {
 // PUT /api/admin/events - Edit event name and slug
 export async function PUT(req: NextRequest) {
   if (!(await isServerAdminAuthenticated())) {
+    console.warn('[API /api/admin/events PUT Warning]: Request unauthenticated.');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -162,7 +179,8 @@ export async function PUT(req: NextRequest) {
       await client.end();
     }
   } catch (err: any) {
-    console.error('[API /api/admin/events PUT Error]:', err);
+    console.error('[API /api/admin/events PUT Error Message]:', err?.message || err);
+    console.error('[API /api/admin/events PUT Error Stack]:', err?.stack || 'No stack trace');
     return NextResponse.json({ error: err.message || 'Failed to update event' }, { status: 500 });
   }
 }
@@ -170,6 +188,7 @@ export async function PUT(req: NextRequest) {
 // DELETE /api/admin/events - Delete event
 export async function DELETE(req: NextRequest) {
   if (!(await isServerAdminAuthenticated())) {
+    console.warn('[API /api/admin/events DELETE Warning]: Request unauthenticated.');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -191,7 +210,8 @@ export async function DELETE(req: NextRequest) {
       await client.end();
     }
   } catch (err: any) {
-    console.error('[API /api/admin/events DELETE Error]:', err);
+    console.error('[API /api/admin/events DELETE Error Message]:', err?.message || err);
+    console.error('[API /api/admin/events DELETE Error Stack]:', err?.stack || 'No stack trace');
     return NextResponse.json({ error: err.message || 'Failed to delete event' }, { status: 500 });
   }
 }

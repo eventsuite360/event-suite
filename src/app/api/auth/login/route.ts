@@ -16,16 +16,20 @@ export async function POST(req: NextRequest) {
     const normalizedEmail = email.trim().toLowerCase();
     const submittedPassword = password.trim();
 
+    console.log(`[API /api/auth/login]: Login attempt for email "${normalizedEmail}"`);
+
     // 1. Platform Admin Check
     const expectedEmail = (process.env.ADMIN_EMAIL || 'event.admin@gmail.com').trim().toLowerCase();
     const expectedPassword = (process.env.ADMIN_PASSWORD || 'EventAdmin2026!SecurePass#').trim();
 
     if (normalizedEmail === expectedEmail && submittedPassword === expectedPassword) {
+      console.log('[API /api/auth/login]: Platform Admin credentials matched.');
       await setAdminSessionCookie(normalizedEmail, 'admin', null);
       return NextResponse.json({ success: true, redirect: '/admin' });
     }
 
     // Database Checks (Event Admin & Event Sub-User)
+    console.log('[API /api/auth/login]: Checking Supabase PostgreSQL database for credentials...');
     const client = getPgClient();
     await client.connect();
 
@@ -42,6 +46,7 @@ export async function POST(req: NextRequest) {
         const event = eventRes.rows[0];
 
         if (event.event_admin_password && event.event_admin_password.trim() === submittedPassword) {
+          console.log(`[API /api/auth/login]: Event Admin credentials matched for event "${event.name}".`);
           await setAdminSessionCookie(event.event_admin_email, 'event_admin', event.id, {
             canAccessRegistration: true,
             canAccessExpenseRevenue: true,
@@ -62,6 +67,7 @@ export async function POST(req: NextRequest) {
         const subUser = subUserRes.rows[0];
 
         if (subUser.password && subUser.password.trim() === submittedPassword) {
+          console.log(`[API /api/auth/login]: Event Sub-User credentials matched for email "${subUser.email}".`);
           await setAdminSessionCookie(subUser.email, 'event_sub_user', subUser.event_id, {
             canAccessRegistration: !!subUser.can_access_registration,
             canAccessExpenseRevenue: !!subUser.can_access_expense_revenue,
@@ -70,10 +76,15 @@ export async function POST(req: NextRequest) {
         }
       }
     } finally {
-      await client.end();
+      try {
+        await client.end();
+      } catch {
+        // ignore
+      }
     }
 
     // 4. Fallback: No credential matched
+    console.warn(`[API /api/auth/login]: No credential matched for email "${normalizedEmail}".`);
     return NextResponse.json(
       { error: 'Invalid email or password.' },
       { status: 401 }
