@@ -1,8 +1,7 @@
 import React from 'react';
 import { redirect } from 'next/navigation';
 import { isServerPlatformAdminAuthenticated, isServerEventAdminAuthenticated } from '@/lib/session';
-import { Sidebar } from '@/components/admin/Sidebar';
-import { Topbar } from '@/components/admin/Topbar';
+import { AdminLayoutWrapper } from '@/components/admin/AdminLayoutWrapper';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const isPlatformAdmin = await isServerPlatformAdminAuthenticated();
@@ -15,16 +14,5 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect('/login');
   }
 
-  return (
-    <div className="flex min-h-screen bg-zinc-50 font-sans text-zinc-900 antialiased">
-      {/* Sidebar Navigation */}
-      <Sidebar />
-
-      {/* Main Workspace Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <Topbar />
-        <main className="flex-1 p-8 overflow-y-auto">{children}</main>
-      </div>
-    </div>
-  );
+  return <AdminLayoutWrapper>{children}</AdminLayoutWrapper>;
 }

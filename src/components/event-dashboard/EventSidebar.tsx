@@ -3,13 +3,15 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Users, Ticket, DollarSign, LogOut, Sparkles } from 'lucide-react';
+import { Users, Ticket, DollarSign, LogOut, Sparkles, X } from 'lucide-react';
 
 interface EventSidebarProps {
   eventName?: string;
   role?: 'admin' | 'event_admin' | 'event_sub_user';
   canAccessRegistration?: boolean;
   canAccessExpenseRevenue?: boolean;
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export function EventSidebar({
@@ -17,6 +19,8 @@ export function EventSidebar({
   role,
   canAccessRegistration,
   canAccessExpenseRevenue,
+  mobileOpen,
+  onCloseMobile,
 }: EventSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -24,6 +28,7 @@ export function EventSidebar({
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
+      onCloseMobile?.();
       router.push('/login');
       router.refresh();
     } catch (err) {
@@ -54,11 +59,11 @@ export function EventSidebar({
 
   const navItems = allNavItems.filter((item) => item.show);
 
-  return (
-    <aside className="w-64 bg-black text-white flex flex-col justify-between min-h-screen border-r border-zinc-800 shrink-0">
+  const sidebarContent = (
+    <div className="flex flex-col h-full justify-between bg-black text-white">
       <div>
         {/* Brand Header */}
-        <div className="p-6 border-b border-zinc-900">
+        <div className="p-6 border-b border-zinc-900 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-white text-black flex items-center justify-center font-bold shadow-md">
               <Sparkles className="w-5 h-5" />
@@ -70,6 +75,17 @@ export function EventSidebar({
               </div>
             </div>
           </div>
+
+          {/* Mobile Close Button */}
+          {onCloseMobile && (
+            <button
+              onClick={onCloseMobile}
+              className="md:hidden rounded-lg p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+              aria-label="Close menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* Navigation Section */}
@@ -86,6 +102,7 @@ export function EventSidebar({
                 <Link
                   key={item.name}
                   href={item.href}
+                  onClick={() => onCloseMobile?.()}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
                     isActive
                       ? 'bg-zinc-800 text-white shadow-xs'
@@ -111,6 +128,31 @@ export function EventSidebar({
           <span>Sign Out</span>
         </button>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Static Sidebar (md:flex) */}
+      <aside className="hidden md:flex w-64 bg-black text-white shrink-0 min-h-screen border-r border-zinc-800 flex-col">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Drawer Overlay (< md) */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/70 backdrop-blur-xs transition-opacity"
+            onClick={onCloseMobile}
+          />
+
+          {/* Sliding Drawer */}
+          <aside className="relative z-10 w-64 max-w-[80vw] h-full bg-black border-r border-zinc-800 shadow-2xl">
+            {sidebarContent}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

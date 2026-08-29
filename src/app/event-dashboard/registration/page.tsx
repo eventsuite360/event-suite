@@ -426,7 +426,7 @@ export default function EventRegistrationPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {/* Admin Export & Import Buttons */}
           {isAdmin && (
             <>
@@ -602,7 +602,7 @@ export default function EventRegistrationPage() {
       )}
 
       {/* Main Table Card */}
-      <Card className="p-6">
+      <Card className="p-4 sm:p-6">
         {/* Search & Filter Bar */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
           <div className="relative w-full sm:w-80">

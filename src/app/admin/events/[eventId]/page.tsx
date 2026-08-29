@@ -352,32 +352,32 @@ export default function AdminEventDetailPage({ params }: { params: Promise<{ eve
 
           {/* Credentials Info Box */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-zinc-900 text-xs">
-            <div className="bg-zinc-900/90 p-3 rounded-xl border border-zinc-800 flex items-center justify-between">
-              <div>
+            <div className="bg-zinc-900/90 p-3 rounded-xl border border-zinc-800 flex items-center justify-between gap-2 min-w-0">
+              <div className="min-w-0 flex-1">
                 <span className="text-[10px] font-bold uppercase text-zinc-400 block">Event Admin Email</span>
-                <span className="font-mono text-sm font-semibold text-white">{event.event_admin_email}</span>
+                <span className="font-mono text-xs sm:text-sm font-semibold text-white truncate block">{event.event_admin_email}</span>
               </div>
               <Button
                 size="sm"
                 variant="outline"
                 type="button"
-                className="bg-black text-white border-zinc-700 hover:bg-zinc-800"
+                className="bg-black text-white border-zinc-700 hover:bg-zinc-800 shrink-0"
                 onClick={() => copyToClipboard(event.event_admin_email, 'admin-email')}
               >
                 {copiedField === 'admin-email' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               </Button>
             </div>
 
-            <div className="bg-zinc-900/90 p-3 rounded-xl border border-zinc-800 flex items-center justify-between">
-              <div>
+            <div className="bg-zinc-900/90 p-3 rounded-xl border border-zinc-800 flex items-center justify-between gap-2 min-w-0">
+              <div className="min-w-0 flex-1">
                 <span className="text-[10px] font-bold uppercase text-zinc-400 block">Event Admin Password</span>
-                <span className="font-mono text-sm font-semibold text-white">{event.event_admin_password}</span>
+                <span className="font-mono text-xs sm:text-sm font-semibold text-white truncate block">{event.event_admin_password}</span>
               </div>
               <Button
                 size="sm"
                 variant="outline"
                 type="button"
-                className="bg-black text-white border-zinc-700 hover:bg-zinc-800"
+                className="bg-black text-white border-zinc-700 hover:bg-zinc-800 shrink-0"
                 onClick={() => copyToClipboard(event.event_admin_password || '', 'admin-pass')}
               >
                 {copiedField === 'admin-pass' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -503,7 +503,7 @@ export default function AdminEventDetailPage({ params }: { params: Promise<{ eve
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <Button
               variant="outline"
               size="sm"

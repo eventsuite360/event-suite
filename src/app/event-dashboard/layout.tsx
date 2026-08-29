@@ -17,6 +17,7 @@ export default function EventDashboardLayout({
     canAccessExpenseRevenue?: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     async function fetchSessionData() {
@@ -44,7 +45,7 @@ export default function EventDashboardLayout({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
         <div className="text-center text-zinc-500 text-sm">
           <div className="inline-block animate-spin w-6 h-6 border-2 border-black border-t-transparent rounded-full mb-3" />
           <p>Loading event portal...</p>
@@ -54,16 +55,22 @@ export default function EventDashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex">
+    <div className="min-h-screen bg-zinc-50 flex overflow-x-hidden font-sans text-zinc-900 antialiased">
       <EventSidebar
         eventName={sessionData?.name}
         role={sessionData?.role}
         canAccessRegistration={sessionData?.canAccessRegistration}
         canAccessExpenseRevenue={sessionData?.canAccessExpenseRevenue}
+        mobileOpen={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
       />
-      <div className="flex-1 flex flex-col min-w-0">
-        <EventTopbar eventName={sessionData?.name} email={sessionData?.email} />
-        <main className="flex-1 p-6 md:p-8 overflow-y-auto">{children}</main>
+      <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
+        <EventTopbar
+          eventName={sessionData?.name}
+          email={sessionData?.email}
+          onMenuClick={() => setMobileMenuOpen(true)}
+        />
+        <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto min-w-0">{children}</main>
       </div>
     </div>
   );

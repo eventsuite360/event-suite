@@ -47,23 +47,23 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-black flex flex-col justify-center py-8 px-4 sm:py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Header & Logo */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center z-10">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-white text-black shadow-xl mb-6">
-          <Sparkles className="w-8 h-8" />
+        <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white text-black shadow-xl mb-4 sm:mb-6">
+          <Sparkles className="w-6 h-6 sm:w-8 sm:h-8" />
         </div>
-        <h2 className="text-3xl font-extrabold text-white tracking-tight">Event Suite 360</h2>
-        <p className="mt-2 text-sm text-zinc-400 font-medium">Sign in to your account</p>
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Event Suite 360</h2>
+        <p className="mt-1.5 text-xs sm:text-sm text-zinc-400 font-medium">Sign in to your account</p>
       </div>
 
       {/* Login Card */}
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md z-10 px-4">
-        <div className="bg-white py-8 px-6 shadow-2xl rounded-2xl sm:px-10 border border-zinc-200">
-          <form className="space-y-5" onSubmit={handleLogin}>
+      <div className="mt-6 sm:mt-8 sm:mx-auto sm:w-full sm:max-w-md z-10">
+        <div className="bg-white py-6 px-4 sm:py-8 sm:px-10 shadow-2xl rounded-2xl border border-zinc-200">
+          <form className="space-y-4 sm:space-y-5" onSubmit={handleLogin}>
             {error && (
-              <div className="p-3.5 rounded-lg bg-zinc-100 border border-zinc-300 flex items-start gap-3 text-zinc-900 text-sm">
-                <AlertCircle className="w-5 h-5 text-black shrink-0 mt-0.5" />
+              <div className="p-3 sm:p-3.5 rounded-lg bg-zinc-100 border border-zinc-300 flex items-start gap-2.5 sm:gap-3 text-zinc-900 text-xs sm:text-sm">
+                <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-black shrink-0 mt-0.5" />
                 <span className="flex-1 font-medium">{error}</span>
               </div>
             )}

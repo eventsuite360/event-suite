@@ -278,15 +278,17 @@ export default function AdminEventsPage() {
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Filter className="w-4 h-4 text-zinc-400" />
-            <span className="text-xs font-semibold text-zinc-500 uppercase">Status:</span>
-            <div className="flex bg-zinc-100 p-1 rounded-lg gap-1 border border-zinc-200">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 uppercase">
+              <Filter className="w-4 h-4 text-zinc-400" />
+              <span>Status:</span>
+            </div>
+            <div className="flex bg-zinc-100 p-1 rounded-lg gap-1 border border-zinc-200 overflow-x-auto max-w-full">
               {['all', 'draft', 'published', 'archived'].map((st) => (
                 <button
                   key={st}
                   onClick={() => setStatusFilter(st)}
-                  className={`px-3 py-1 text-xs font-medium rounded-md capitalize transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md capitalize transition-all cursor-pointer whitespace-nowrap ${
                     statusFilter === st
                       ? 'bg-black text-white shadow-xs'
                       : 'text-zinc-600 hover:text-black'
