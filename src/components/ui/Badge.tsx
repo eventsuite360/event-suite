@@ -2,7 +2,7 @@ import React from 'react';
 import { EventStatus, UserRole } from '@/lib/types';
 
 interface BadgeProps {
-  variant?: EventStatus | UserRole | 'default' | 'success' | 'warning' | 'danger' | 'info';
+  variant?: EventStatus | UserRole | 'default' | 'success' | 'warning' | 'danger' | 'info' | 'outline';
   children: React.ReactNode;
   className?: string;
 }
@@ -18,6 +18,7 @@ export const Badge: React.FC<BadgeProps> = ({ variant = 'default', children, cla
     warning: 'bg-zinc-100 text-zinc-800 ring-1 ring-zinc-300',
     danger: 'bg-zinc-900 text-white ring-1 ring-zinc-900',
     info: 'bg-zinc-100 text-zinc-900 ring-1 ring-zinc-300',
+    outline: 'bg-white text-zinc-900 ring-1 ring-zinc-300',
   };
 
   const currentStyle = styles[variant] || styles.default;

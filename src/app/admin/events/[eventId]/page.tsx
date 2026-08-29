@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
 import { 
   ArrowLeft, Calendar, DollarSign, Users, TrendingUp, TrendingDown, Wallet, 
-  Shield, Check, Copy, Plus, Edit3, Trash2, AlertTriangle, FileText, Lock 
+  Shield, Check, Copy, Plus, Edit3, Trash2, AlertTriangle, FileText, Lock, Download, PieChart
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/Card';
 import { StatCard } from '@/components/admin/StatCard';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { exportRegistrationsToCSV, exportRegistrationsToPDF } from '@/lib/registration-export';
 
 interface EventDetail {
   id: string;
@@ -45,6 +46,19 @@ interface EntryItem {
   created_at: string;
 }
 
+interface RegistrationItem {
+  id: string;
+  event_id: string;
+  full_name: string;
+  phone_number: string;
+  gender: string;
+  age: number;
+  email: string;
+  created_by_user_id: string;
+  created_by_user_name: string;
+  created_at: string;
+}
+
 export default function AdminEventDetailPage({ params }: { params: Promise<{ eventId: string }> }) {
   const resolvedParams = use(params);
   const eventId = resolvedParams.eventId;
@@ -52,6 +66,13 @@ export default function AdminEventDetailPage({ params }: { params: Promise<{ eve
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [subUsers, setSubUsers] = useState<SubUserItem[]>([]);
   const [entries, setEntries] = useState<EntryItem[]>([]);
+  const [registrations, setRegistrations] = useState<RegistrationItem[]>([]);
+  const [registrationAnalytics, setRegistrationAnalytics] = useState<{
+    total: number;
+    gender: { Male: number; Female: number; Other: number };
+    age: { '0-18': number; '19-30': number; '31-45': number; '46+': number };
+  } | null>(null);
+
   const [totals, setTotals] = useState({
     totalExpenses: 0,
     totalRevenue: 0,
@@ -92,6 +113,8 @@ export default function AdminEventDetailPage({ params }: { params: Promise<{ eve
         setEvent(data.event);
         setSubUsers(data.subUsers || []);
         setEntries(data.entries || []);
+        setRegistrations(data.registrations || []);
+        setRegistrationAnalytics(data.registrationAnalytics || null);
         setTotals(data.totals || { totalExpenses: 0, totalRevenue: 0, netBalance: 0 });
       } else {
         setFetchError(data.error || 'Failed to fetch event detail.');
@@ -458,6 +481,168 @@ export default function AdminEventDetailPage({ params }: { params: Promise<{ eve
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Registrations & Analytics Section (Platform Admin Oversight) */}
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-zinc-900 tracking-tight">
+              Event Registrations ({registrations.length})
+            </h2>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Live attendee registrations and demographic breakdown for platform oversight
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={registrations.length === 0}
+              onClick={() => exportRegistrationsToCSV(registrations, `${event.slug}-registrations.csv`)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export CSV</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={registrations.length === 0}
+              onClick={() => exportRegistrationsToPDF(registrations, event.name)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Export PDF</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* Analytics Charts */}
+        {registrationAnalytics && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Gender Distribution */}
+            <Card className="p-5 border-zinc-200 bg-white">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                  <PieChart className="w-4 h-4 text-zinc-700" />
+                  Gender Distribution
+                </h3>
+                <Badge variant="outline" className="text-[10px]">
+                  {registrationAnalytics.total} Attendees
+                </Badge>
+              </div>
+              <div className="space-y-2.5">
+                {[
+                  { label: 'Male', count: registrationAnalytics.gender.Male },
+                  { label: 'Female', count: registrationAnalytics.gender.Female },
+                  { label: 'Other', count: registrationAnalytics.gender.Other },
+                ].map((item) => {
+                  const pct =
+                    registrationAnalytics.total > 0
+                      ? Math.round((item.count / registrationAnalytics.total) * 100)
+                      : 0;
+                  return (
+                    <div key={item.label} className="space-y-1">
+                      <div className="flex justify-between text-xs font-medium text-zinc-700">
+                        <span>{item.label}</span>
+                        <span className="font-mono font-bold text-zinc-900">{item.count} ({pct}%)</span>
+                      </div>
+                      <div className="w-full h-2 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200">
+                        <div className="h-full bg-zinc-900" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* Age Range Breakdown */}
+            <Card className="p-5 border-zinc-200 bg-white">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-zinc-700" />
+                  Age Range Breakdown
+                </h3>
+                <Badge variant="outline" className="text-[10px]">
+                  4 Buckets
+                </Badge>
+              </div>
+              <div className="space-y-2.5">
+                {[
+                  { label: '0 – 18 yrs', count: registrationAnalytics.age['0-18'] },
+                  { label: '19 – 30 yrs', count: registrationAnalytics.age['19-30'] },
+                  { label: '31 – 45 yrs', count: registrationAnalytics.age['31-45'] },
+                  { label: '46+ yrs', count: registrationAnalytics.age['46+'] },
+                ].map((item) => {
+                  const pct =
+                    registrationAnalytics.total > 0
+                      ? Math.round((item.count / registrationAnalytics.total) * 100)
+                      : 0;
+                  return (
+                    <div key={item.label} className="space-y-1">
+                      <div className="flex justify-between text-xs font-medium text-zinc-700">
+                        <span>{item.label}</span>
+                        <span className="font-mono font-bold text-zinc-900">{item.count} ({pct}%)</span>
+                      </div>
+                      <div className="w-full h-2 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200">
+                        <div className="h-full bg-zinc-800" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Registrations Table */}
+        <Card className="p-0 overflow-hidden">
+          {registrations.length === 0 ? (
+            <div className="py-12 text-center text-zinc-500">
+              <Users className="w-10 h-10 mx-auto text-zinc-300 mb-2" />
+              <p className="font-semibold text-zinc-700">No registrations recorded for this event</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm text-zinc-600">
+                <thead className="text-xs font-semibold text-zinc-500 uppercase bg-zinc-50 border-b border-zinc-200">
+                  <tr>
+                    <th className="py-3.5 px-6">Full Name</th>
+                    <th className="py-3.5 px-6">Phone Number</th>
+                    <th className="py-3.5 px-6">Gender</th>
+                    <th className="py-3.5 px-6">Age</th>
+                    <th className="py-3.5 px-6">Email</th>
+                    <th className="py-3.5 px-6">Added By</th>
+                    <th className="py-3.5 px-6">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {registrations.map((r) => (
+                    <tr key={r.id} className="hover:bg-zinc-50/70 transition-colors">
+                      <td className="py-4 px-6 font-bold text-zinc-900">{r.full_name}</td>
+                      <td className="py-4 px-6 font-mono text-xs text-zinc-700">{r.phone_number}</td>
+                      <td className="py-4 px-6">
+                        <Badge variant="outline" className="text-[10px] uppercase">
+                          {r.gender}
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-6 font-mono text-xs text-zinc-700">{r.age} yrs</td>
+                      <td className="py-4 px-6 text-xs text-zinc-700">{r.email}</td>
+                      <td className="py-4 px-6 text-xs font-semibold text-zinc-800">
+                        {r.created_by_user_name || r.created_by_user_id}
+                      </td>
+                      <td className="py-4 px-6 text-xs text-zinc-400">
+                        {new Date(r.created_at).toLocaleDateString()}
                       </td>
                     </tr>
                   ))}

@@ -64,6 +64,33 @@ export async function GET(
       [eventId]
     );
 
+    // 5. Fetch All Registration Entries & Analytics for Platform Admin
+    const registrationsRes = await client.query(
+      `SELECT id, event_id, full_name, phone_number, gender, age, email, created_by_user_id, created_by_user_name, created_at, updated_at
+       FROM public.registrations
+       WHERE event_id = $1
+       ORDER BY created_at DESC`,
+      [eventId]
+    );
+
+    const regRows = registrationsRes.rows;
+    const regTotal = regRows.length;
+    const genderCounts = { Male: 0, Female: 0, Other: 0 };
+    const ageCounts = { '0-18': 0, '19-30': 0, '31-45': 0, '46+': 0 };
+
+    regRows.forEach((r) => {
+      const g = (r.gender || '').toLowerCase();
+      if (g === 'male' || g === 'm') genderCounts.Male++;
+      else if (g === 'female' || g === 'f') genderCounts.Female++;
+      else genderCounts.Other++;
+
+      const age = parseInt(r.age, 10) || 0;
+      if (age <= 18) ageCounts['0-18']++;
+      else if (age <= 30) ageCounts['19-30']++;
+      else if (age <= 45) ageCounts['31-45']++;
+      else ageCounts['46+']++;
+    });
+
     return NextResponse.json({
       event: eventRes.rows[0],
       subUsers: subUsersRes.rows,
@@ -73,6 +100,12 @@ export async function GET(
         netBalance,
       },
       entries: entriesRes.rows,
+      registrations: regRows,
+      registrationAnalytics: {
+        total: regTotal,
+        gender: genderCounts,
+        age: ageCounts,
+      },
     });
   } catch (err: any) {
     console.error('[API /api/admin/events/[eventId] GET Error]:', err);
