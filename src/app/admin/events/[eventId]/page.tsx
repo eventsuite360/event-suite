@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
 import { 
   ArrowLeft, Calendar, DollarSign, Users, TrendingUp, TrendingDown, Wallet, 
-  Shield, Check, Copy, Plus, Edit3, Trash2, AlertTriangle, FileText, Lock, Download, PieChart
+  Shield, Check, Copy, Plus, Edit3, Trash2, AlertTriangle, FileText, Lock, Download, PieChart as PieChartIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/Card';
 import { StatCard } from '@/components/admin/StatCard';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { PieChart } from '@/components/ui/PieChart';
 import { exportRegistrationsToCSV, exportRegistrationsToPDF } from '@/lib/registration-export';
 
 interface EventDetail {
@@ -530,45 +531,31 @@ export default function AdminEventDetailPage({ params }: { params: Promise<{ eve
         {/* Analytics Charts */}
         {registrationAnalytics && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Gender Distribution */}
-            <Card className="p-5 border-zinc-200 bg-white">
-              <div className="flex items-center justify-between mb-3">
+            {/* Gender Distribution Pie Chart */}
+            <Card className="p-5 border-zinc-200 bg-white flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2">
-                  <PieChart className="w-4 h-4 text-zinc-700" />
+                  <PieChartIcon className="w-4 h-4 text-zinc-700" />
                   Gender Distribution
                 </h3>
                 <Badge variant="outline" className="text-[10px]">
                   {registrationAnalytics.total} Attendees
                 </Badge>
               </div>
-              <div className="space-y-2.5">
-                {[
-                  { label: 'Male', count: registrationAnalytics.gender.Male },
-                  { label: 'Female', count: registrationAnalytics.gender.Female },
-                  { label: 'Other', count: registrationAnalytics.gender.Other },
-                ].map((item) => {
-                  const pct =
-                    registrationAnalytics.total > 0
-                      ? Math.round((item.count / registrationAnalytics.total) * 100)
-                      : 0;
-                  return (
-                    <div key={item.label} className="space-y-1">
-                      <div className="flex justify-between text-xs font-medium text-zinc-700">
-                        <span>{item.label}</span>
-                        <span className="font-mono font-bold text-zinc-900">{item.count} ({pct}%)</span>
-                      </div>
-                      <div className="w-full h-2 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200">
-                        <div className="h-full bg-zinc-900" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+
+              <PieChart
+                data={[
+                  { name: 'Male', value: registrationAnalytics.gender.Male, color: '#18181b' },
+                  { name: 'Female', value: registrationAnalytics.gender.Female, color: '#52525b' },
+                  { name: 'Other', value: registrationAnalytics.gender.Other, color: '#a1a1aa' },
+                ]}
+                size={160}
+              />
             </Card>
 
-            {/* Age Range Breakdown */}
-            <Card className="p-5 border-zinc-200 bg-white">
-              <div className="flex items-center justify-between mb-3">
+            {/* Age Range Breakdown Pie Chart */}
+            <Card className="p-5 border-zinc-200 bg-white flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-zinc-700" />
                   Age Range Breakdown
@@ -577,30 +564,16 @@ export default function AdminEventDetailPage({ params }: { params: Promise<{ eve
                   4 Buckets
                 </Badge>
               </div>
-              <div className="space-y-2.5">
-                {[
-                  { label: '0 – 18 yrs', count: registrationAnalytics.age['0-18'] },
-                  { label: '19 – 30 yrs', count: registrationAnalytics.age['19-30'] },
-                  { label: '31 – 45 yrs', count: registrationAnalytics.age['31-45'] },
-                  { label: '46+ yrs', count: registrationAnalytics.age['46+'] },
-                ].map((item) => {
-                  const pct =
-                    registrationAnalytics.total > 0
-                      ? Math.round((item.count / registrationAnalytics.total) * 100)
-                      : 0;
-                  return (
-                    <div key={item.label} className="space-y-1">
-                      <div className="flex justify-between text-xs font-medium text-zinc-700">
-                        <span>{item.label}</span>
-                        <span className="font-mono font-bold text-zinc-900">{item.count} ({pct}%)</span>
-                      </div>
-                      <div className="w-full h-2 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200">
-                        <div className="h-full bg-zinc-800" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+
+              <PieChart
+                data={[
+                  { name: '0–18 yrs', value: registrationAnalytics.age['0-18'], color: '#09090b' },
+                  { name: '19–30 yrs', value: registrationAnalytics.age['19-30'], color: '#3f3f46' },
+                  { name: '31–45 yrs', value: registrationAnalytics.age['31-45'], color: '#71717a' },
+                  { name: '46+ yrs', value: registrationAnalytics.age['46+'], color: '#d4d4d8' },
+                ]}
+                size={160}
+              />
             </Card>
           </div>
         )}

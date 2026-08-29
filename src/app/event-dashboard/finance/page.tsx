@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, Search, Trash2, Edit3, DollarSign, TrendingUp, TrendingDown, Wallet, AlertTriangle, FileText } from 'lucide-react';
+import { Plus, Search, Trash2, Edit3, DollarSign, TrendingUp, TrendingDown, Wallet, AlertTriangle, FileText, PieChart as PieChartIcon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { StatCard } from '@/components/admin/StatCard';
+import { PieChart } from '@/components/ui/PieChart';
 
 interface EntryItem {
   id: string;
@@ -276,27 +277,52 @@ export default function EventFinancePage() {
         </div>
       )}
 
-      {/* Summary Stat Cards — Shown ONLY to Admins */}
+      {/* Summary Stat Cards & Financial Ratio Chart — Shown ONLY to Admins */}
       {!isSubUser && totals && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-          <StatCard
-            title="Total Revenue"
-            value={loading ? '...' : `₹${totals.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-            icon={TrendingUp}
-            description="Cumulative revenue collected"
-          />
-          <StatCard
-            title="Total Expenses"
-            value={loading ? '...' : `₹${totals.totalExpenses.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-            icon={TrendingDown}
-            description="Cumulative expenses incurred"
-          />
-          <StatCard
-            title="Net Balance"
-            value={loading ? '...' : `₹${totals.netBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-            icon={Wallet}
-            description="Net revenue minus expenses"
-          />
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <StatCard
+              title="Total Revenue"
+              value={loading ? '...' : `₹${totals.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              icon={TrendingUp}
+              description="Cumulative revenue collected"
+            />
+            <StatCard
+              title="Total Expenses"
+              value={loading ? '...' : `₹${totals.totalExpenses.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              icon={TrendingDown}
+              description="Cumulative expenses incurred"
+            />
+            <StatCard
+              title="Net Balance"
+              value={loading ? '...' : `₹${totals.netBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              icon={Wallet}
+              description="Net revenue minus expenses"
+            />
+          </div>
+
+          {/* Monochrome Financial Ratio Pie Chart */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="p-5 border-zinc-200 bg-white flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-bold text-zinc-900 tracking-tight flex items-center gap-2">
+                  <PieChartIcon className="w-4 h-4 text-zinc-700" />
+                  Revenue vs. Expense Ratio
+                </h3>
+                <Badge variant="outline" className="text-[10px] bg-zinc-100 text-zinc-700">
+                  Financial Split
+                </Badge>
+              </div>
+
+              <PieChart
+                data={[
+                  { name: 'Revenue', value: totals.totalRevenue, color: '#18181b' },
+                  { name: 'Expense', value: totals.totalExpenses, color: '#71717a' },
+                ]}
+                size={170}
+              />
+            </Card>
+          </div>
         </div>
       )}
 

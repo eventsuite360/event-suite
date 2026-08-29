@@ -12,7 +12,7 @@ import {
   FileSpreadsheet,
   FileText,
   AlertTriangle,
-  PieChart,
+  PieChart as PieChartIcon,
   UserCheck,
   Calendar,
   CheckCircle2,
@@ -24,6 +24,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { StatCard } from '@/components/admin/StatCard';
+import { PieChart } from '@/components/ui/PieChart';
 import {
   RegistrationItem,
   exportRegistrationsToCSV,
@@ -557,7 +558,7 @@ export default function EventRegistrationPage() {
             <StatCard
               title="Gender Diversity"
               value={`${analytics.gender.Male} Male / ${analytics.gender.Female} Female`}
-              icon={PieChart}
+              icon={PieChartIcon}
               description={`${analytics.gender.Other} Other`}
             />
             <StatCard
@@ -570,13 +571,13 @@ export default function EventRegistrationPage() {
             />
           </div>
 
-          {/* Monochrome Charts Section */}
+          {/* Monochrome Interactive Pie Charts Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Gender Breakdown Chart */}
-            <Card className="p-5 border-zinc-200 bg-white">
-              <div className="flex items-center justify-between mb-4">
+            {/* Gender Breakdown Pie Chart */}
+            <Card className="p-5 border-zinc-200 bg-white flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-bold text-zinc-900 tracking-tight flex items-center gap-2">
-                  <PieChart className="w-4 h-4 text-zinc-700" />
+                  <PieChartIcon className="w-4 h-4 text-zinc-700" />
                   Gender Distribution
                 </h3>
                 <Badge variant="outline" className="text-[10px] bg-zinc-100 text-zinc-700">
@@ -584,36 +585,19 @@ export default function EventRegistrationPage() {
                 </Badge>
               </div>
 
-              <div className="space-y-3">
-                {[
-                  { label: 'Male', count: analytics.gender.Male },
-                  { label: 'Female', count: analytics.gender.Female },
-                  { label: 'Other', count: analytics.gender.Other },
-                ].map((item) => {
-                  const pct = analytics.total > 0 ? Math.round((item.count / analytics.total) * 100) : 0;
-                  return (
-                    <div key={item.label} className="space-y-1">
-                      <div className="flex justify-between text-xs font-medium text-zinc-700">
-                        <span>{item.label}</span>
-                        <span className="font-mono text-zinc-900 font-bold">
-                          {item.count} ({pct}%)
-                        </span>
-                      </div>
-                      <div className="w-full h-2.5 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200">
-                        <div
-                          className="h-full bg-zinc-900 transition-all duration-500"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <PieChart
+                data={[
+                  { name: 'Male', value: analytics.gender.Male, color: '#18181b' },
+                  { name: 'Female', value: analytics.gender.Female, color: '#52525b' },
+                  { name: 'Other', value: analytics.gender.Other, color: '#a1a1aa' },
+                ]}
+                size={170}
+              />
             </Card>
 
-            {/* Age Ranges Chart */}
-            <Card className="p-5 border-zinc-200 bg-white">
-              <div className="flex items-center justify-between mb-4">
+            {/* Age Range Breakdown Pie Chart */}
+            <Card className="p-5 border-zinc-200 bg-white flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-bold text-zinc-900 tracking-tight flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-zinc-700" />
                   Age Range Breakdown
@@ -623,32 +607,15 @@ export default function EventRegistrationPage() {
                 </Badge>
               </div>
 
-              <div className="space-y-3">
-                {[
-                  { label: '0 – 18 yrs', count: analytics.age['0-18'] },
-                  { label: '19 – 30 yrs', count: analytics.age['19-30'] },
-                  { label: '31 – 45 yrs', count: analytics.age['31-45'] },
-                  { label: '46+ yrs', count: analytics.age['46+'] },
-                ].map((item) => {
-                  const pct = analytics.total > 0 ? Math.round((item.count / analytics.total) * 100) : 0;
-                  return (
-                    <div key={item.label} className="space-y-1">
-                      <div className="flex justify-between text-xs font-medium text-zinc-700">
-                        <span>{item.label}</span>
-                        <span className="font-mono text-zinc-900 font-bold">
-                          {item.count} ({pct}%)
-                        </span>
-                      </div>
-                      <div className="w-full h-2.5 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200">
-                        <div
-                          className="h-full bg-zinc-800 transition-all duration-500"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <PieChart
+                data={[
+                  { name: '0–18 yrs', value: analytics.age['0-18'], color: '#09090b' },
+                  { name: '19–30 yrs', value: analytics.age['19-30'], color: '#3f3f46' },
+                  { name: '31–45 yrs', value: analytics.age['31-45'], color: '#71717a' },
+                  { name: '46+ yrs', value: analytics.age['46+'], color: '#d4d4d8' },
+                ]}
+                size={170}
+              />
             </Card>
           </div>
         </div>
