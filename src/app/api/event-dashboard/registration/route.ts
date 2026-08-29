@@ -275,7 +275,7 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-// DELETE /api/event-dashboard/registration - Delete registration entry (Admins only)
+// DELETE /api/event-dashboard/registration - Delete single or ALL registration entries (Admins only)
 export async function DELETE(req: NextRequest) {
   try {
     const session = await getRequestSessionData(req);
@@ -290,15 +290,29 @@ export async function DELETE(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-
-    if (!id) {
-      return NextResponse.json({ error: 'Registration ID is required.' }, { status: 400 });
-    }
+    const deleteAll = searchParams.get('all') === 'true' || id === 'all';
 
     const client = getPgClient();
     await client.connect();
 
     try {
+      if (deleteAll) {
+        // Delete ALL registration entries strictly scoped to this event_id
+        const deleteRes = await client.query(
+          `DELETE FROM public.registrations WHERE event_id = $1`,
+          [session.eventId]
+        );
+
+        return NextResponse.json({
+          message: 'All registrations for this event deleted successfully',
+          deletedCount: deleteRes.rowCount,
+        });
+      }
+
+      if (!id) {
+        return NextResponse.json({ error: 'Registration ID is required.' }, { status: 400 });
+      }
+
       await client.query(
         `DELETE FROM public.registrations WHERE id = $1 AND event_id = $2`,
         [id, session.eventId]

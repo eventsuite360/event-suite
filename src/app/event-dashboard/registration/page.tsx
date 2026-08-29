@@ -53,6 +53,8 @@ export default function EventRegistrationPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
+  const [deleteAllConfirmInput, setDeleteAllConfirmInput] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<RegistrationItem | null>(null);
 
   // Form State for Add / Edit
@@ -144,6 +146,12 @@ export default function EventRegistrationPage() {
     setImportSuccessMessage(null);
     setFormError(null);
     setIsImportOpen(true);
+  };
+
+  const openDeleteAllModal = () => {
+    setDeleteAllConfirmInput('');
+    setFormError(null);
+    setIsDeleteAllOpen(true);
   };
 
   // Submit Add
@@ -296,6 +304,38 @@ export default function EventRegistrationPage() {
     }
   };
 
+  // Submit Delete All
+  const handleDeleteAllRegistrations = async () => {
+    if (deleteAllConfirmInput.trim().toUpperCase() !== 'DELETE') {
+      setFormError('Please type "DELETE" to confirm mass deletion.');
+      return;
+    }
+
+    setActionLoading(true);
+    setFormError(null);
+
+    try {
+      const res = await fetch('/api/event-dashboard/registration?all=true', {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setFormError(data.error || 'Failed to delete registrations.');
+        setActionLoading(false);
+        return;
+      }
+
+      setIsDeleteAllOpen(false);
+      fetchRegistrationData();
+    } catch (err: any) {
+      setFormError(err.message || 'An error occurred while deleting all registrations.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Handle CSV File Selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -420,6 +460,17 @@ export default function EventRegistrationPage() {
               >
                 <Upload className="w-3.5 h-3.5" />
                 <span>Import CSV</span>
+              </Button>
+
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={openDeleteAllModal}
+                className="inline-flex items-center gap-1.5 border-zinc-200 hover:bg-zinc-100 text-zinc-900"
+                disabled={registrations.length === 0}
+              >
+                <Trash2 className="w-3.5 h-3.5 text-zinc-700" />
+                <span>Delete All</span>
               </Button>
             </>
           )}
@@ -999,6 +1050,59 @@ export default function EventRegistrationPage() {
               className="bg-black text-white hover:bg-zinc-800"
             >
               {actionLoading ? 'Bulk Inserting to Database...' : `Import ${csvPreviewRows.length} Registrations`}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 5. Delete All Confirmation Modal (Event Admin & Core Admin only) */}
+      <Modal isOpen={isDeleteAllOpen} onClose={() => setIsDeleteAllOpen(false)} title="Delete All Registrations">
+        <div className="space-y-4">
+          <div className="p-4 bg-zinc-100 border border-zinc-300 rounded-xl text-zinc-900 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-black shrink-0 mt-0.5" />
+            <div className="text-xs space-y-1">
+              <p className="font-bold text-zinc-900">WARNING: Permanent Deletion</p>
+              <p className="text-zinc-600">
+                This will permanently delete ALL <strong className="text-zinc-900 font-bold">{registrations.length} registration entries</strong> for this event from the database.
+              </p>
+              <p className="text-zinc-500 font-medium">
+                &bull; This action cannot be undone.<br />
+                &bull; This will NOT affect financial entries, event sub-users, or any other event data.
+              </p>
+            </div>
+          </div>
+
+          {formError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+              <span>{formError}</span>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-zinc-800 mb-1.5">
+              To confirm, please type <code className="bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200 font-mono text-black font-bold">DELETE</code> below:
+            </label>
+            <Input
+              placeholder="Type DELETE to confirm"
+              value={deleteAllConfirmInput}
+              onChange={(e) => setDeleteAllConfirmInput(e.target.value)}
+              className="text-xs font-mono"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t border-zinc-100">
+            <Button type="button" variant="secondary" size="sm" onClick={() => setIsDeleteAllOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={actionLoading || deleteAllConfirmInput.trim().toUpperCase() !== 'DELETE'}
+              onClick={handleDeleteAllRegistrations}
+              className="bg-black text-white hover:bg-zinc-800 font-semibold"
+            >
+              {actionLoading ? 'Deleting All Registrations...' : 'Yes, Delete All Registrations'}
             </Button>
           </div>
         </div>
