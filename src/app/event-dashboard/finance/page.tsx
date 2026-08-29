@@ -55,15 +55,29 @@ export default function EventFinancePage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const fetchFinancialData = useCallback(async () => {
+  // Pagination States
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [paginationInfo, setPaginationInfo] = useState<{
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }>({ total: 0, page: 1, limit: 25, totalPages: 1 });
+
+  const fetchFinancialData = useCallback(async (targetPage = page) => {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch('/api/event-dashboard/expense-revenue');
+      const res = await fetch(`/api/event-dashboard/expense-revenue?page=${targetPage}&limit=${pageSize}`);
       const data = await res.json();
       if (res.ok) {
         setEntries(data.entries || []);
         setTotals(data.totals || null);
+        if (data.pagination) {
+          setPaginationInfo(data.pagination);
+          setPage(data.pagination.page);
+        }
         setUserRole(data.userRole || '');
         setCurrentUserEmail(data.currentUserEmail || '');
       } else {
@@ -74,11 +88,11 @@ export default function EventFinancePage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => {
-    fetchFinancialData();
-  }, [fetchFinancialData]);
+    fetchFinancialData(page);
+  }, [fetchFinancialData, page]);
 
   const openAddModal = () => {
     setFormData({
@@ -333,9 +347,10 @@ export default function EventFinancePage() {
       {/* Table */}
       <Card className="p-0 overflow-hidden">
         {loading ? (
-          <div className="py-16 text-center text-zinc-400 text-sm">
-            <div className="inline-block animate-spin w-6 h-6 border-2 border-black border-t-transparent rounded-full mb-3" />
-            <p>Loading entries...</p>
+          <div className="p-6 space-y-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-12 bg-zinc-100 animate-pulse rounded-lg w-full" />
+            ))}
           </div>
         ) : filteredEntries.length === 0 ? (
           <div className="py-16 text-center text-zinc-500">
@@ -348,67 +363,110 @@ export default function EventFinancePage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-zinc-600">
-              <thead className="text-xs font-semibold text-zinc-500 uppercase bg-zinc-50 border-b border-zinc-200">
-                <tr>
-                  <th className="py-3.5 px-6">Subject / Description</th>
-                  <th className="py-3.5 px-6">Entry Type</th>
-                  <th className="py-3.5 px-6">Amount</th>
-                  {!isSubUser && <th className="py-3.5 px-6">Recorded By</th>}
-                  <th className="py-3.5 px-6">Date</th>
-                  <th className="py-3.5 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100">
-                {filteredEntries.map((entry) => (
-                  <tr key={entry.id} className="hover:bg-zinc-50/70 transition-colors">
-                    <td className="py-4 px-6 font-bold text-zinc-900">{entry.subject}</td>
-                    <td className="py-4 px-6">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                          entry.type === 'revenue'
-                            ? 'bg-zinc-900 text-white border-zinc-800'
-                            : 'bg-zinc-100 text-zinc-800 border-zinc-300'
-                        }`}
-                      >
-                        {entry.type === 'revenue' ? '+ Revenue' : '- Expense'}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 font-mono text-sm font-bold text-zinc-900">
-                      ₹{entry.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
-                    {!isSubUser && (
-                      <td className="py-4 px-6 text-xs text-zinc-700 font-semibold">
-                        {entry.created_by_user_name}
-                      </td>
-                    )}
-                    <td className="py-4 px-6 text-xs text-zinc-400">
-                      {new Date(entry.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="py-4 px-6 text-right space-x-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openEditModal(entry)}
-                        title="Edit Entry"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => openDeleteModal(entry)}
-                        title="Delete Entry"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </td>
+          <>
+            <div className="overflow-x-auto min-w-0">
+              <table className="w-full text-left text-sm text-zinc-600">
+                <thead className="text-xs font-semibold text-zinc-500 uppercase bg-zinc-50 border-b border-zinc-200">
+                  <tr>
+                    <th className="py-3.5 px-6">Subject / Description</th>
+                    <th className="py-3.5 px-6">Entry Type</th>
+                    <th className="py-3.5 px-6">Amount</th>
+                    {!isSubUser && <th className="py-3.5 px-6">Recorded By</th>}
+                    <th className="py-3.5 px-6">Date</th>
+                    <th className="py-3.5 px-6 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {filteredEntries.map((entry) => (
+                    <tr key={entry.id} className="hover:bg-zinc-50/70 transition-colors">
+                      <td className="py-4 px-6 font-bold text-zinc-900">{entry.subject}</td>
+                      <td className="py-4 px-6">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                            entry.type === 'revenue'
+                              ? 'bg-zinc-900 text-white border-zinc-800'
+                              : 'bg-zinc-100 text-zinc-800 border-zinc-300'
+                          }`}
+                        >
+                          {entry.type === 'revenue' ? '+ Revenue' : '- Expense'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 font-mono text-sm font-bold text-zinc-900">
+                        ₹{entry.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      {!isSubUser && (
+                        <td className="py-4 px-6 text-xs text-zinc-700 font-semibold">
+                          {entry.created_by_user_name}
+                        </td>
+                      )}
+                      <td className="py-4 px-6 text-xs text-zinc-400">
+                        {new Date(entry.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="py-4 px-6 text-right space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openEditModal(entry)}
+                          title="Edit Entry"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => openDeleteModal(entry)}
+                          title="Delete Entry"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Bar */}
+            {paginationInfo.total > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-zinc-200 text-xs text-zinc-600 bg-zinc-50/50">
+                <div>
+                  Showing{' '}
+                  <strong className="font-semibold text-zinc-900">
+                    {Math.min((page - 1) * pageSize + 1, paginationInfo.total)}
+                  </strong>{' '}
+                  to{' '}
+                  <strong className="font-semibold text-zinc-900">
+                    {Math.min(page * pageSize, paginationInfo.total)}
+                  </strong>{' '}
+                  of <strong className="font-semibold text-zinc-900">{paginationInfo.total}</strong> entries
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1 || loading}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="text-xs px-2.5 py-1"
+                  >
+                    Previous
+                  </Button>
+                  <span className="font-mono text-xs font-semibold px-2">
+                    Page {page} of {paginationInfo.totalPages || 1}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= paginationInfo.totalPages || loading}
+                    onClick={() => setPage((p) => Math.min(paginationInfo.totalPages, p + 1))}
+                    className="text-xs px-2.5 py-1"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </Card>
 

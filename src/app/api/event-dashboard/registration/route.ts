@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRequestSessionData } from '@/lib/session';
 import { getPgClient } from '@/lib/db';
 
-// GET /api/event-dashboard/registration - List scoped registrations and analytics
+// GET /api/event-dashboard/registration - List scoped registrations with DB pagination & server-side SQL analytics
 export async function GET(req: NextRequest) {
   try {
     const session = await getRequestSessionData(req);
@@ -17,6 +17,13 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const targetEventId = searchParams.get('eventId') || session.eventId;
+    
+    // Pagination parameters
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const rawLimit = searchParams.get('limit') || '25';
+    const isExport = rawLimit === 'all' || rawLimit === '0';
+    const limit = isExport ? 10000 : Math.max(1, Math.min(100, parseInt(rawLimit, 10)));
+    const offset = (page - 1) * limit;
 
     const client = getPgClient();
     await client.connect();
@@ -24,57 +31,83 @@ export async function GET(req: NextRequest) {
     try {
       let analytics = null;
       let registrationsRes;
+      let totalCount = 0;
 
       if (session.role === 'event_sub_user') {
-        // Sub-users see ONLY their own created entries and MUST NOT receive analytics/totals
+        // Sub-users see ONLY their own entries (DB filtered) & NO analytics
+        const countRes = await client.query(
+          `SELECT COUNT(*)::int AS count
+           FROM public.registrations
+           WHERE event_id = $1 AND lower(created_by_user_id) = lower($2)`,
+          [targetEventId, session.email]
+        );
+        totalCount = countRes.rows[0]?.count || 0;
+
         registrationsRes = await client.query(
           `SELECT id, event_id, full_name, phone_number, gender, age, email, created_by_user_id, created_by_user_name, created_at, updated_at
            FROM public.registrations
            WHERE event_id = $1 AND lower(created_by_user_id) = lower($2)
-           ORDER BY created_at DESC`,
-          [targetEventId, session.email]
+           ORDER BY created_at DESC
+           LIMIT $3 OFFSET $4`,
+          [targetEventId, session.email, limit, offset]
         );
       } else {
-        // Event Admin & Platform Admin see ALL registrations and aggregate analytics
+        // Event Admin & Platform Admin: Server-Side SQL Analytics Aggregation
+        const analyticsRes = await client.query(
+          `SELECT 
+             COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE lower(gender) IN ('male', 'm'))::int AS male,
+             COUNT(*) FILTER (WHERE lower(gender) IN ('female', 'f'))::int AS female,
+             COUNT(*) FILTER (WHERE lower(gender) NOT IN ('male', 'm', 'female', 'f'))::int AS other,
+             COUNT(*) FILTER (WHERE age <= 18)::int AS age_0_18,
+             COUNT(*) FILTER (WHERE age > 18 AND age <= 30)::int AS age_19_30,
+             COUNT(*) FILTER (WHERE age > 30 AND age <= 45)::int AS age_31_45,
+             COUNT(*) FILTER (WHERE age > 45)::int AS age_46_plus
+           FROM public.registrations
+           WHERE event_id = $1`,
+          [targetEventId]
+        );
+
+        const aRow = analyticsRes.rows[0] || {};
+        totalCount = aRow.total || 0;
+
+        analytics = {
+          total: totalCount,
+          gender: {
+            Male: aRow.male || 0,
+            Female: aRow.female || 0,
+            Other: aRow.other || 0,
+          },
+          age: {
+            '0-18': aRow.age_0_18 || 0,
+            '19-30': aRow.age_19_30 || 0,
+            '31-45': aRow.age_31_45 || 0,
+            '46+': aRow.age_46_plus || 0,
+          },
+        };
+
+        // Scoped DB Paginated list query
         registrationsRes = await client.query(
           `SELECT id, event_id, full_name, phone_number, gender, age, email, created_by_user_id, created_by_user_name, created_at, updated_at
            FROM public.registrations
            WHERE event_id = $1
-           ORDER BY created_at DESC`,
-          [targetEventId]
+           ORDER BY created_at DESC
+           LIMIT $2 OFFSET $3`,
+          [targetEventId, limit, offset]
         );
-
-        const rows = registrationsRes.rows;
-        const total = rows.length;
-
-        const genderCounts = { Male: 0, Female: 0, Other: 0 };
-        const ageCounts = { '0-18': 0, '19-30': 0, '31-45': 0, '46+': 0 };
-
-        rows.forEach((r) => {
-          // Gender analytics
-          const g = (r.gender || '').toLowerCase();
-          if (g === 'male' || g === 'm') genderCounts.Male++;
-          else if (g === 'female' || g === 'f') genderCounts.Female++;
-          else genderCounts.Other++;
-
-          // Age range analytics
-          const age = parseInt(r.age, 10) || 0;
-          if (age <= 18) ageCounts['0-18']++;
-          else if (age <= 30) ageCounts['19-30']++;
-          else if (age <= 45) ageCounts['31-45']++;
-          else ageCounts['46+']++;
-        });
-
-        analytics = {
-          total,
-          gender: genderCounts,
-          age: ageCounts,
-        };
       }
+
+      const totalPages = Math.ceil(totalCount / limit) || 1;
 
       return NextResponse.json({
         registrations: registrationsRes.rows,
         analytics,
+        pagination: {
+          total: totalCount,
+          page,
+          limit,
+          totalPages,
+        },
         userRole: session.role,
         currentUserEmail: session.email,
       });
@@ -124,7 +157,6 @@ export async function POST(req: NextRequest) {
 
       // Check if bulk insert (Import CSV)
       if (Array.isArray(body.registrations)) {
-        // Bulk import is ONLY allowed for Event Admin & Platform Admin
         if (session.role === 'event_sub_user') {
           return NextResponse.json({ error: 'Forbidden — Only admins can import CSV registrations.' }, { status: 403 });
         }
@@ -242,7 +274,6 @@ export async function PUT(req: NextRequest) {
     await client.connect();
 
     try {
-      // Server-side Ownership Check for Sub-users
       if (session.role === 'event_sub_user') {
         const checkRes = await client.query(
           `SELECT created_by_user_id FROM public.registrations WHERE id = $1 AND event_id = $2`,
@@ -297,7 +328,6 @@ export async function DELETE(req: NextRequest) {
 
     try {
       if (deleteAll) {
-        // Delete ALL registration entries strictly scoped to this event_id
         const deleteRes = await client.query(
           `DELETE FROM public.registrations WHERE event_id = $1`,
           [session.eventId]

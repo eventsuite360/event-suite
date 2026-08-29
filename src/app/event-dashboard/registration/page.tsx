@@ -82,16 +82,33 @@ export default function EventRegistrationPage() {
   const [importSuccessMessage, setImportSuccessMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch registrations fresh from Supabase via API
-  const fetchRegistrationData = useCallback(async () => {
+  // Pagination States
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [paginationInfo, setPaginationInfo] = useState<{
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }>({ total: 0, page: 1, limit: 25, totalPages: 1 });
+
+  // Export Loading State
+  const [exportLoading, setExportLoading] = useState(false);
+
+  // Fetch registrations fresh from Supabase via API with pagination
+  const fetchRegistrationData = useCallback(async (targetPage = page) => {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch('/api/event-dashboard/registration');
+      const res = await fetch(`/api/event-dashboard/registration?page=${targetPage}&limit=${pageSize}`);
       const data = await res.json();
       if (res.ok) {
         setRegistrations(data.registrations || []);
         setAnalytics(data.analytics || null);
+        if (data.pagination) {
+          setPaginationInfo(data.pagination);
+          setPage(data.pagination.page);
+        }
         setUserRole(data.userRole || '');
         setCurrentUserEmail(data.currentUserEmail || '');
       } else {
@@ -102,11 +119,47 @@ export default function EventRegistrationPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => {
-    fetchRegistrationData();
-  }, [fetchRegistrationData]);
+    fetchRegistrationData(page);
+  }, [fetchRegistrationData, page]);
+
+  // Full Export CSV Handler (fetches all pages)
+  const handleExportCSV = async () => {
+    setExportLoading(true);
+    try {
+      const res = await fetch('/api/event-dashboard/registration?limit=all');
+      const data = await res.json();
+      if (res.ok && data.registrations) {
+        exportRegistrationsToCSV(data.registrations);
+      } else {
+        exportRegistrationsToCSV(registrations);
+      }
+    } catch {
+      exportRegistrationsToCSV(registrations);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Full Export PDF Handler (fetches all pages)
+  const handleExportPDF = async () => {
+    setExportLoading(true);
+    try {
+      const res = await fetch('/api/event-dashboard/registration?limit=all');
+      const data = await res.json();
+      if (res.ok && data.registrations) {
+        exportRegistrationsToPDF(data.registrations);
+      } else {
+        exportRegistrationsToPDF(registrations);
+      }
+    } catch {
+      exportRegistrationsToPDF(registrations);
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
   // Open Modals
   const openAddModal = () => {
@@ -433,23 +486,23 @@ export default function EventRegistrationPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => exportRegistrationsToCSV(filteredRegistrations)}
+                onClick={handleExportCSV}
                 className="inline-flex items-center gap-1.5"
-                disabled={filteredRegistrations.length === 0}
+                disabled={exportLoading || (paginationInfo.total === 0 && registrations.length === 0)}
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Export CSV</span>
+                <span>{exportLoading ? 'Exporting...' : 'Export CSV'}</span>
               </Button>
 
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => exportRegistrationsToPDF(filteredRegistrations)}
+                onClick={handleExportPDF}
                 className="inline-flex items-center gap-1.5"
-                disabled={filteredRegistrations.length === 0}
+                disabled={exportLoading || (paginationInfo.total === 0 && registrations.length === 0)}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>Export PDF</span>
+                <span>{exportLoading ? 'Exporting...' : 'Export PDF'}</span>
               </Button>
 
               <Button
@@ -632,9 +685,10 @@ export default function EventRegistrationPage() {
 
         {/* Table Content */}
         {loading ? (
-          <div className="text-center py-16 text-xs text-zinc-500">
-            <div className="inline-block animate-spin w-5 h-5 border-2 border-black border-t-transparent rounded-full mb-2" />
-            <p>Fetching fresh registrations from database...</p>
+          <div className="space-y-2 py-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-12 bg-zinc-100 animate-pulse rounded-lg w-full" />
+            ))}
           </div>
         ) : filteredRegistrations.length === 0 ? (
           <div className="text-center py-16 border border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
@@ -649,84 +703,127 @@ export default function EventRegistrationPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto border border-zinc-200 rounded-xl">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-700 font-semibold uppercase tracking-wider text-[11px]">
-                  <th className="py-3 px-4">Full Name</th>
-                  <th className="py-3 px-4">Phone Number</th>
-                  <th className="py-3 px-4">Gender</th>
-                  <th className="py-3 px-4">Age</th>
-                  <th className="py-3 px-4">Email</th>
-                  {isAdmin && <th className="py-3 px-4">Added By</th>}
-                  <th className="py-3 px-4">Date</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200 bg-white">
-                {filteredRegistrations.map((r) => {
-                  const isOwnEntry =
-                    r.created_by_user_id.toLowerCase() === currentUserEmail.toLowerCase();
-                  const canEdit = isAdmin || isOwnEntry;
+          <>
+            <div className="overflow-x-auto border border-zinc-200 rounded-xl min-w-0">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-700 font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="py-3 px-4">Full Name</th>
+                    <th className="py-3 px-4">Phone Number</th>
+                    <th className="py-3 px-4">Gender</th>
+                    <th className="py-3 px-4">Age</th>
+                    <th className="py-3 px-4">Email</th>
+                    {isAdmin && <th className="py-3 px-4">Added By</th>}
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 bg-white">
+                  {filteredRegistrations.map((r) => {
+                    const isOwnEntry =
+                      r.created_by_user_id.toLowerCase() === currentUserEmail.toLowerCase();
+                    const canEdit = isAdmin || isOwnEntry;
 
-                  return (
-                    <tr key={r.id} className="hover:bg-zinc-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-semibold text-zinc-900">{r.full_name}</td>
-                      <td className="py-3.5 px-4 font-mono text-zinc-700">{r.phone_number}</td>
-                      <td className="py-3.5 px-4">
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] capitalize bg-zinc-50 text-zinc-800 border-zinc-200"
-                        >
-                          {r.gender}
-                        </Badge>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-zinc-700">{r.age} yrs</td>
-                      <td className="py-3.5 px-4 text-zinc-700">{r.email}</td>
-
-                      {/* Added By column rendered ONLY for Admins */}
-                      {isAdmin && (
+                    return (
+                      <tr key={r.id} className="hover:bg-zinc-50/80 transition-colors">
+                        <td className="py-3.5 px-4 font-semibold text-zinc-900">{r.full_name}</td>
+                        <td className="py-3.5 px-4 font-mono text-zinc-700">{r.phone_number}</td>
                         <td className="py-3.5 px-4">
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-zinc-100 text-zinc-800 font-medium text-[11px]">
-                            {r.created_by_user_name || r.created_by_user_id}
-                          </span>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] capitalize bg-zinc-50 text-zinc-800 border-zinc-200"
+                          >
+                            {r.gender}
+                          </Badge>
                         </td>
-                      )}
+                        <td className="py-3.5 px-4 font-mono text-zinc-700">{r.age} yrs</td>
+                        <td className="py-3.5 px-4 text-zinc-700">{r.email}</td>
 
-                      <td className="py-3.5 px-4 text-zinc-500">
-                        {new Date(r.created_at).toLocaleDateString()}
-                      </td>
+                        {/* Added By column rendered ONLY for Admins */}
+                        {isAdmin && (
+                          <td className="py-3.5 px-4">
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-zinc-100 text-zinc-800 font-medium text-[11px]">
+                              {r.created_by_user_name || r.created_by_user_id}
+                            </span>
+                          </td>
+                        )}
 
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {canEdit && (
-                            <button
-                              onClick={() => openEditModal(r)}
-                              className="p-1.5 rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-black transition-colors"
-                              title="Edit Registration"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                        <td className="py-3.5 px-4 text-zinc-500">
+                          {new Date(r.created_at).toLocaleDateString()}
+                        </td>
 
-                          {/* Delete button rendered ONLY for Event Admin / Platform Admin */}
-                          {isAdmin && (
-                            <button
-                              onClick={() => openDeleteModal(r)}
-                              className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors"
-                              title="Delete Registration"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {canEdit && (
+                              <button
+                                onClick={() => openEditModal(r)}
+                                className="p-1.5 rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-black transition-colors"
+                                title="Edit Registration"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            {/* Delete button rendered ONLY for Event Admin / Platform Admin */}
+                            {isAdmin && (
+                              <button
+                                onClick={() => openDeleteModal(r)}
+                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors"
+                                title="Delete Registration"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {paginationInfo.total > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 mt-4 border-t border-zinc-200 text-xs text-zinc-600">
+                <div>
+                  Showing{' '}
+                  <strong className="font-semibold text-zinc-900">
+                    {Math.min((page - 1) * pageSize + 1, paginationInfo.total)}
+                  </strong>{' '}
+                  to{' '}
+                  <strong className="font-semibold text-zinc-900">
+                    {Math.min(page * pageSize, paginationInfo.total)}
+                  </strong>{' '}
+                  of <strong className="font-semibold text-zinc-900">{paginationInfo.total}</strong> registrations
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={page <= 1 || loading}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="text-xs px-2.5 py-1"
+                  >
+                    Previous
+                  </Button>
+                  <span className="font-mono text-xs font-semibold px-2">
+                    Page {page} of {paginationInfo.totalPages || 1}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={page >= paginationInfo.totalPages || loading}
+                    onClick={() => setPage((p) => Math.min(paginationInfo.totalPages, p + 1))}
+                    className="text-xs px-2.5 py-1"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </Card>
 

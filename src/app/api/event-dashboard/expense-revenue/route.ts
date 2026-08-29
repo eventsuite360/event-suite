@@ -18,26 +18,44 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const targetEventId = searchParams.get('eventId') || session.eventId;
 
+    // Pagination parameters
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const rawLimit = searchParams.get('limit') || '25';
+    const isExport = rawLimit === 'all' || rawLimit === '0';
+    const limit = isExport ? 10000 : Math.max(1, Math.min(100, parseInt(rawLimit, 10)));
+    const offset = (page - 1) * limit;
+
     const client = getPgClient();
     await client.connect();
 
     try {
       let totals = null;
       let entriesRes;
+      let totalCount = 0;
 
       if (session.role === 'event_sub_user') {
         // Sub-users see ONLY their own individual entries and MUST NOT receive event aggregate totals
+        const countRes = await client.query(
+          `SELECT COUNT(*)::int AS count
+           FROM public.expense_revenue_entries
+           WHERE event_id = $1 AND lower(created_by_user_id) = lower($2)`,
+          [targetEventId, session.email]
+        );
+        totalCount = countRes.rows[0]?.count || 0;
+
         entriesRes = await client.query(
           `SELECT id, event_id, created_by_user_id, created_by_user_name, type, subject, amount, created_at 
            FROM public.expense_revenue_entries 
            WHERE event_id = $1 AND lower(created_by_user_id) = lower($2)
-           ORDER BY created_at DESC`,
-          [targetEventId, session.email]
+           ORDER BY created_at DESC
+           LIMIT $3 OFFSET $4`,
+          [targetEventId, session.email, limit, offset]
         );
       } else {
         // Event Admin & Platform Admin see ALL entries with creator names and event totals
         const totalsRes = await client.query(
           `SELECT 
+             COUNT(*)::int AS count,
              COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS total_expenses,
              COALESCE(SUM(CASE WHEN type = 'revenue' THEN amount ELSE 0 END), 0) AS total_revenue
            FROM public.expense_revenue_entries
@@ -45,8 +63,9 @@ export async function GET(req: NextRequest) {
           [targetEventId]
         );
 
-        const totalExpenses = parseFloat(totalsRes.rows[0].total_expenses || '0');
-        const totalRevenue = parseFloat(totalsRes.rows[0].total_revenue || '0');
+        totalCount = totalsRes.rows[0]?.count || 0;
+        const totalExpenses = parseFloat(totalsRes.rows[0]?.total_expenses || '0');
+        const totalRevenue = parseFloat(totalsRes.rows[0]?.total_revenue || '0');
         const netBalance = totalRevenue - totalExpenses;
 
         totals = {
@@ -59,14 +78,23 @@ export async function GET(req: NextRequest) {
           `SELECT id, event_id, created_by_user_id, created_by_user_name, type, subject, amount, created_at 
            FROM public.expense_revenue_entries 
            WHERE event_id = $1 
-           ORDER BY created_at DESC`,
-          [targetEventId]
+           ORDER BY created_at DESC
+           LIMIT $2 OFFSET $3`,
+          [targetEventId, limit, offset]
         );
       }
+
+      const totalPages = Math.ceil(totalCount / limit) || 1;
 
       return NextResponse.json({
         totals,
         entries: entriesRes.rows,
+        pagination: {
+          total: totalCount,
+          page,
+          limit,
+          totalPages,
+        },
         userRole: session.role,
         currentUserEmail: session.email,
       });
