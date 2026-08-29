@@ -165,7 +165,7 @@ function parseCSVLine(text: string): string[] {
   return result;
 }
 
-// 3. Parse CSV text into validated registration rows with tolerant column header mapping
+// 3. Parse CSV text into validated registration rows with robust multi-column header matching
 export function parseCSVRegistrations(csvText: string): {
   validRows: ParsedRegistrationRow[];
   errors: string[];
@@ -175,27 +175,35 @@ export function parseCSVRegistrations(csvText: string): {
     return { validRows: [], errors: ['CSV file is empty.'] };
   }
 
-  const rawHeaders = parseCSVLine(lines[0]).map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const headerCells = parseCSVLine(lines[0]);
+  const normalizedHeaders = headerCells.map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
   
-  // Find column indices by header matching
-  const findHeaderIndex = (aliases: string[]) => {
-    return rawHeaders.findIndex((h) => aliases.some((alias) => h === alias || h.includes(alias)));
+  // Find ALL matching column indices for candidate aliases
+  const findAllHeaderIndices = (aliases: string[]): number[] => {
+    const indices: number[] = [];
+    normalizedHeaders.forEach((h, idx) => {
+      if (aliases.some((alias) => h === alias || h.includes(alias))) {
+        indices.push(idx);
+      }
+    });
+    return indices;
   };
 
-  const nameIdx = findHeaderIndex(['fullname', 'name', 'full_name', 'attendee', 'name']);
-  const phoneIdx = findHeaderIndex(['phonenumber', 'phone', 'mobile', 'contact', 'cell']);
-  const genderIdx = findHeaderIndex(['gender', 'sex']);
-  const ageIdx = findHeaderIndex(['age']);
-  const emailIdx = findHeaderIndex(['email', 'mail', 'emailaddress']);
+  // Candidate alias lists for each field
+  const nameIndices = findAllHeaderIndices(['fullname', 'full_name', 'name', 'attendee', 'participant']);
+  const phoneIndices = findAllHeaderIndices(['phonenumber', 'phone_number', 'phone', 'mobile', 'contact', 'cell', 'whatsapp']);
+  const genderIndices = findAllHeaderIndices(['gender', 'sex']);
+  const ageIndices = findAllHeaderIndices(['age']);
+  const emailIndices = findAllHeaderIndices(['emailaddress', 'email_address', 'e-mail', 'email', 'mail']);
 
   const errors: string[] = [];
   const missingHeaders: string[] = [];
 
-  if (nameIdx === -1) missingHeaders.push('Full Name');
-  if (phoneIdx === -1) missingHeaders.push('Phone Number');
-  if (genderIdx === -1) missingHeaders.push('Gender');
-  if (ageIdx === -1) missingHeaders.push('Age');
-  if (emailIdx === -1) missingHeaders.push('Email');
+  if (nameIndices.length === 0) missingHeaders.push('Full Name');
+  if (phoneIndices.length === 0) missingHeaders.push('Phone Number');
+  if (genderIndices.length === 0) missingHeaders.push('Gender');
+  if (ageIndices.length === 0) missingHeaders.push('Age');
+  if (emailIndices.length === 0) missingHeaders.push('Email / Email Address');
 
   if (missingHeaders.length > 0) {
     return {
@@ -203,6 +211,27 @@ export function parseCSVRegistrations(csvText: string): {
       errors: [`Missing required column headers: ${missingHeaders.join(', ')}. Please check your CSV header row.`],
     };
   }
+
+  // Helper to extract first non-empty cell value from candidate column indices
+  const getFirstNonEmptyCell = (cells: string[], indices: number[]): string => {
+    for (const idx of indices) {
+      if (cells[idx] !== undefined && cells[idx] !== null && cells[idx].trim().length > 0) {
+        return cells[idx].trim();
+      }
+    }
+    return '';
+  };
+
+  // Helper specifically for email: pick first candidate cell containing '@', otherwise first non-empty candidate cell
+  const getBestEmailCell = (cells: string[], indices: number[]): string => {
+    for (const idx of indices) {
+      const val = cells[idx] ? cells[idx].trim() : '';
+      if (val && val.includes('@')) {
+        return val;
+      }
+    }
+    return getFirstNonEmptyCell(cells, indices);
+  };
 
   const validRows: ParsedRegistrationRow[] = [];
 
@@ -213,11 +242,11 @@ export function parseCSVRegistrations(csvText: string): {
     const cells = parseCSVLine(rowLine);
     const rowNum = i + 1;
 
-    const rawName = cells[nameIdx] || '';
-    const rawPhone = cells[phoneIdx] || '';
-    const rawGender = cells[genderIdx] || '';
-    const rawAge = cells[ageIdx] || '';
-    const rawEmail = cells[emailIdx] || '';
+    const rawName = getFirstNonEmptyCell(cells, nameIndices);
+    const rawPhone = getFirstNonEmptyCell(cells, phoneIndices);
+    const rawGender = getFirstNonEmptyCell(cells, genderIndices);
+    const rawAge = getFirstNonEmptyCell(cells, ageIndices);
+    const rawEmail = getBestEmailCell(cells, emailIndices);
 
     if (!rawName) {
       errors.push(`Row ${rowNum}: Full Name is missing.`);
@@ -249,7 +278,7 @@ export function parseCSVRegistrations(csvText: string): {
       phone_number: rawPhone,
       gender: normalizedGender,
       age: parsedAge,
-      email: rawEmail,
+      email: rawEmail.toLowerCase(),
     });
   }
 
