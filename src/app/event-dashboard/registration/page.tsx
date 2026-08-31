@@ -108,7 +108,7 @@ export default function EventRegistrationPage() {
   const [sheetFormError, setSheetFormError] = useState<string | null>(null);
   const [sheetActionLoading, setSheetActionLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
-  const [syncToast, setSyncToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [syncToast, setSyncToast] = useState<{ type: 'success' | 'error'; message: string; details?: string[] } | null>(null);
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
 
   // Helper for relative timestamp display
@@ -347,6 +347,7 @@ export default function EventRegistrationPage() {
       setSyncToast({
         type: 'success',
         message: data.message || `${data.newCount} new registrations added, ${data.skippedCount} already existed (skipped).`,
+        details: data.invalidReasons && data.invalidReasons.length > 0 ? data.invalidReasons : undefined,
       });
 
       if (data.lastSyncedAt) {
@@ -728,26 +729,38 @@ export default function EventRegistrationPage() {
       {/* Toast Notification Banner for Google Sheet Sync & actions */}
       {syncToast && (
         <Card
-          className={`p-3 text-xs flex items-center justify-between gap-2 border shadow-xs transition-all ${
+          className={`p-3 text-xs border shadow-xs transition-all ${
             syncToast.type === 'success'
               ? 'bg-zinc-900 text-white border-zinc-800'
               : 'bg-red-50 text-red-700 border-red-200'
           }`}
         >
-          <div className="flex items-center gap-2">
-            {syncToast.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            ) : (
-              <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-            )}
-            <span className="font-medium">{syncToast.message}</span>
+          <div className="flex items-start justify-between gap-2">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 font-medium">
+                {syncToast.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                )}
+                <span>{syncToast.message}</span>
+              </div>
+              {syncToast.details && syncToast.details.length > 0 && (
+                <div className="pl-6 pt-1 text-[11px] opacity-90 space-y-0.5 max-h-36 overflow-y-auto font-mono">
+                  <p className="font-semibold text-amber-300">Invalid Rows Detail:</p>
+                  {syncToast.details.map((detail, idx) => (
+                    <p key={idx}>&bull; {detail}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setSyncToast(null)}
+              className="text-xs opacity-70 hover:opacity-100 font-bold px-1.5 py-0.5 rounded shrink-0"
+            >
+              ✕
+            </button>
           </div>
-          <button
-            onClick={() => setSyncToast(null)}
-            className="text-xs opacity-70 hover:opacity-100 font-bold px-1.5 py-0.5 rounded"
-          >
-            ✕
-          </button>
         </Card>
       )}
 

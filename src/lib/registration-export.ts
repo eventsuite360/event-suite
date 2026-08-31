@@ -145,43 +145,79 @@ export function exportRegistrationsToPDF(registrations: RegistrationItem[], even
   printWindow.document.close();
 }
 
-// Helper to parse line respecting CSV quotes
-function parseCSVLine(text: string): string[] {
-  const result: string[] = [];
-  let current = '';
+// Helper to normalize phone numbers (strips spaces, dashes, brackets, non-digits except optional leading +)
+export function normalizePhoneNumber(phone: string): string {
+  if (!phone || typeof phone !== 'string') return '';
+  const trimmed = phone.trim();
+  const hasPlus = trimmed.startsWith('+');
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return '';
+  return hasPlus ? `+${digits}` : digits;
+}
+
+export function getDigitsOnlyPhone(phone: string): string {
+  if (!phone || typeof phone !== 'string') return '';
+  return phone.replace(/\D/g, '');
+}
+
+// Helper to parse full CSV text into 2D records matrix respecting quoted line breaks
+export function parseCSVRecords(csvText: string): string[][] {
+  const records: string[][] = [];
+  let currentRecord: string[] = [];
+  let currentField = '';
   let inQuotes = false;
 
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
+  for (let i = 0; i < csvText.length; i++) {
+    const char = csvText[i];
+    const nextChar = csvText[i + 1];
+
     if (char === '"' || char === "'") {
-      if (inQuotes && text[i + 1] === char) {
-        current += char;
+      if (inQuotes && nextChar === char) {
+        currentField += char;
         i++;
       } else {
         inQuotes = !inQuotes;
       }
     } else if (char === ',' && !inQuotes) {
-      result.push(current.trim());
-      current = '';
+      currentRecord.push(currentField.trim());
+      currentField = '';
+    } else if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') {
+        i++;
+      }
+      currentRecord.push(currentField.trim());
+      if (currentRecord.some((f) => f.length > 0)) {
+        records.push(currentRecord);
+      }
+      currentRecord = [];
+      currentField = '';
     } else {
-      current += char;
+      currentField += char;
     }
   }
-  result.push(current.trim());
-  return result;
+
+  if (currentField.length > 0 || currentRecord.length > 0) {
+    currentRecord.push(currentField.trim());
+    if (currentRecord.some((f) => f.length > 0)) {
+      records.push(currentRecord);
+    }
+  }
+
+  return records;
 }
 
-// 3. Parse CSV text into validated registration rows with robust multi-column header matching
+// 3. Parse CSV text into validated registration rows with robust multi-column header matching & multiline support
 export function parseCSVRegistrations(csvText: string): {
   validRows: ParsedRegistrationRow[];
   errors: string[];
+  totalDataRowsCount: number;
 } {
-  const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length === 0) {
-    return { validRows: [], errors: ['CSV file is empty.'] };
+  const records = parseCSVRecords(csvText);
+  if (records.length === 0) {
+    return { validRows: [], errors: ['CSV file is empty.'], totalDataRowsCount: 0 };
   }
 
-  const headerCells = parseCSVLine(lines[0]);
+  const headerCells = records[0];
   const normalizedHeaders = headerCells.map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
   // Excluded / ignored header patterns
@@ -220,6 +256,7 @@ export function parseCSVRegistrations(csvText: string): {
     return {
       validRows: [],
       errors: [`Missing required column headers: ${missingHeaders.join(', ')}. Please check your CSV header row.`],
+      totalDataRowsCount: Math.max(0, records.length - 1),
     };
   }
 
@@ -245,13 +282,11 @@ export function parseCSVRegistrations(csvText: string): {
   };
 
   const validRows: ParsedRegistrationRow[] = [];
+  const dataRecords = records.slice(1);
 
-  for (let i = 1; i < lines.length; i++) {
-    const rowLine = lines[i].trim();
-    if (!rowLine) continue;
-
-    const cells = parseCSVLine(rowLine);
-    const rowNum = i + 1;
+  for (let i = 0; i < dataRecords.length; i++) {
+    const cells = dataRecords[i];
+    const rowNum = i + 2; // +1 for 1-index header, +1 for 1-index row count in sheet
 
     const rawName = getFirstNonEmptyCell(cells, nameIndices);
     const rawPhone = getFirstNonEmptyCell(cells, phoneIndices);
@@ -259,12 +294,15 @@ export function parseCSVRegistrations(csvText: string): {
     const rawAge = getFirstNonEmptyCell(cells, ageIndices);
     const rawEmail = getBestEmailCell(cells, emailIndices);
 
+    const cleanEmail = rawEmail ? rawEmail.trim().toLowerCase() : '';
+    const cleanPhone = normalizePhoneNumber(rawPhone);
+
     if (!rawName) {
       errors.push(`Row ${rowNum}: Full Name is missing.`);
       continue;
     }
 
-    if (!rawEmail && !rawPhone) {
+    if (!cleanEmail && !cleanPhone) {
       errors.push(`Row ${rowNum}: Either Email or Phone Number is required.`);
       continue;
     }
@@ -282,12 +320,12 @@ export function parseCSVRegistrations(csvText: string): {
 
     validRows.push({
       full_name: rawName,
-      phone_number: rawPhone,
+      phone_number: cleanPhone || rawPhone.trim(),
       gender: normalizedGender,
       age: parsedAge,
-      email: rawEmail ? rawEmail.toLowerCase() : '',
+      email: cleanEmail,
     });
   }
 
-  return { validRows, errors };
+  return { validRows, errors, totalDataRowsCount: dataRecords.length };
 }
