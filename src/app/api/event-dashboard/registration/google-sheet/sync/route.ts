@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
 
       const { validRows, errors: parseErrors, totalDataRowsCount } = parseResult;
 
-      // 4. Fetch existing registrations in DB for deduplication
+      // 4. Fetch existing registrations in DB for deduplication & ID mapping
       const dbCountRes = await client.query(
         `SELECT COUNT(*)::int AS count FROM public.registrations WHERE event_id = $1`,
         [session.eventId]
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
       const existingDBCount = dbCountRes.rows[0]?.count || 0;
 
       const existingRes = await client.query(
-        `SELECT lower(email) AS email, phone_number FROM public.registrations WHERE event_id = $1`,
+        `SELECT id, lower(email) AS email, phone_number FROM public.registrations WHERE event_id = $1`,
         [session.eventId]
       );
 
@@ -153,12 +153,39 @@ export async function POST(req: NextRequest) {
       const existingPhoneDigits = new Set<string>();
       const existingRawPhones = new Set<string>();
 
+      const emailToRegId = new Map<string, string>();
+      const phoneToRegId = new Map<string, string>();
+
       for (const row of existingRes.rows) {
-        if (row.email) existingEmails.add(row.email.trim().toLowerCase());
+        const regId = row.id;
+        if (row.email) {
+          const em = row.email.trim().toLowerCase();
+          existingEmails.add(em);
+          emailToRegId.set(em, regId);
+        }
         if (row.phone_number) {
-          existingRawPhones.add(row.phone_number.trim());
+          const ph = row.phone_number.trim();
+          existingRawPhones.add(ph);
+          phoneToRegId.set(ph, regId);
           const digits = getDigitsOnlyPhone(row.phone_number);
-          if (digits) existingPhoneDigits.add(digits);
+          if (digits) {
+            existingPhoneDigits.add(digits);
+            phoneToRegId.set(digits, regId);
+          }
+        }
+      }
+
+      // Fetch existing recorded duplicate submissions to prevent duplicated logs on re-sync
+      const recordedDupesRes = await client.query(
+        `SELECT lower(email) AS email, phone_number FROM public.registration_duplicate_submissions WHERE event_id = $1`,
+        [session.eventId]
+      );
+      const recordedDupeKeys = new Set<string>();
+      for (const r of recordedDupesRes.rows) {
+        const em = r.email ? r.email.trim().toLowerCase() : '';
+        const ph = r.phone_number ? normalizePhoneNumber(r.phone_number) : '';
+        if (em || ph) {
+          recordedDupeKeys.add(`${em}|${ph}`);
         }
       }
 
@@ -194,15 +221,37 @@ export async function POST(req: NextRequest) {
           isDuplicateByPhone = true;
         }
 
-        if (isDuplicateByEmail) {
-          duplicateEmailCount++;
+        if (isDuplicateByEmail || isDuplicateByPhone) {
+          if (isDuplicateByEmail) duplicateEmailCount++;
+          else duplicatePhoneCount++;
           duplicateTotalCount++;
-          continue;
-        }
 
-        if (isDuplicateByPhone && !cleanEmail) {
-          duplicatePhoneCount++;
-          duplicateTotalCount++;
+          // Identify matched original registration ID
+          const matchedRegId =
+            (cleanEmail ? emailToRegId.get(cleanEmail) : null) ||
+            (cleanPhone ? phoneToRegId.get(cleanPhone) : null) ||
+            (phoneDigits ? phoneToRegId.get(phoneDigits) : null) ||
+            null;
+
+          const dupeKey = `${cleanEmail}|${cleanPhone}`;
+          if (!recordedDupeKeys.has(dupeKey)) {
+            await client.query(
+              `INSERT INTO public.registration_duplicate_submissions (
+                 event_id, matched_registration_id, full_name, phone_number, gender, age, email, source
+               ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+              [
+                session.eventId,
+                matchedRegId,
+                row.full_name || '',
+                cleanPhone || row.phone_number || '',
+                row.gender || '',
+                row.age || 0,
+                cleanEmail || '',
+                'google_sheet_sync',
+              ]
+            );
+            recordedDupeKeys.add(dupeKey);
+          }
           continue;
         }
 

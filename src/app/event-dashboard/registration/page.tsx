@@ -23,6 +23,8 @@ import {
   ExternalLink,
   ShieldCheck,
   CheckCheck,
+  Copy,
+  Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -49,6 +51,9 @@ export default function EventRegistrationPage() {
 
   const [userRole, setUserRole] = useState<string>('');
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
+
+  const isAdmin = userRole === 'admin' || userRole === 'event_admin';
+  const isSubUser = userRole === 'event_sub_user';
 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -130,8 +135,31 @@ export default function EventRegistrationPage() {
       gender: string;
       age: number;
     }>;
+    duplicateSubmissionsCount?: number;
     isFullyReconciled: boolean;
   } | null>(null);
+
+  // Duplicate Submissions Preservation States
+  const [isDuplicatesModalOpen, setIsDuplicatesModalOpen] = useState(false);
+  const [duplicatesLoading, setDuplicatesLoading] = useState(false);
+  const [duplicateCount, setDuplicateCount] = useState(0);
+  const [duplicateSubmissions, setDuplicateSubmissions] = useState<
+    Array<{
+      id: string;
+      matched_registration_id: string | null;
+      full_name: string;
+      phone_number: string;
+      gender: string;
+      age: number;
+      email: string;
+      source: string;
+      submitted_at: string;
+      created_at: string;
+      matched_original_name: string | null;
+      matched_original_email: string | null;
+      matched_original_phone: string | null;
+    }>
+  >([]);
 
   // Helper for relative timestamp display
   const formatTimeAgo = useCallback((dateStr: string | null) => {
@@ -185,9 +213,27 @@ export default function EventRegistrationPage() {
     }
   }, [page, pageSize]);
 
+  const fetchDuplicateSubmissions = useCallback(async () => {
+    if (!isAdmin) return;
+    setDuplicatesLoading(true);
+    try {
+      const res = await fetch('/api/event-dashboard/registration/duplicates');
+      const data = await res.json();
+      if (res.ok && data.duplicates) {
+        setDuplicateSubmissions(data.duplicates);
+        setDuplicateCount(data.count || 0);
+      }
+    } catch (err) {
+      console.error('Error fetching duplicate submissions:', err);
+    } finally {
+      setDuplicatesLoading(false);
+    }
+  }, [isAdmin]);
+
   useEffect(() => {
     fetchRegistrationData(page);
-  }, [fetchRegistrationData, page]);
+    fetchDuplicateSubmissions();
+  }, [fetchRegistrationData, fetchDuplicateSubmissions, page]);
 
   // Full Export CSV Handler (fetches all pages)
   const handleExportCSV = async () => {
@@ -377,6 +423,7 @@ export default function EventRegistrationPage() {
       }
 
       fetchRegistrationData();
+      fetchDuplicateSubmissions();
     } catch (err: any) {
       setSyncToast({
         type: 'error',
@@ -410,6 +457,7 @@ export default function EventRegistrationPage() {
 
       setVerifyResult(data);
       setIsVerifyModalOpen(true);
+      fetchDuplicateSubmissions();
     } catch (err: any) {
       setSyncToast({
         type: 'error',
@@ -725,9 +773,6 @@ export default function EventRegistrationPage() {
     return matchesSearch && matchesGender;
   });
 
-  const isSubUser = userRole === 'event_sub_user';
-  const isAdmin = userRole === 'event_admin' || userRole === 'admin';
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -901,6 +946,18 @@ export default function EventRegistrationPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            {duplicateCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsDuplicatesModalOpen(true)}
+                className="text-[11px] h-7 px-2.5 bg-amber-50/60 border-amber-200 text-amber-900 hover:bg-amber-100 flex items-center gap-1 font-medium"
+                title="View preserved duplicate submissions"
+              >
+                <Copy className="w-3 h-3 text-amber-700 shrink-0" />
+                <span>Duplicates ({duplicateCount})</span>
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -1726,6 +1783,33 @@ export default function EventRegistrationPage() {
                 </div>
               </div>
 
+              {/* Preserved Duplicates Link Banner */}
+              <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 text-zinc-700">
+                  <Copy className="w-4 h-4 text-zinc-800 shrink-0" />
+                  <span>
+                    <strong className="text-zinc-900 font-semibold">
+                      {verifyResult.duplicateSubmissionsCount !== undefined
+                        ? verifyResult.duplicateSubmissionsCount
+                        : duplicateCount}{' '}
+                      duplicate submission
+                      {(verifyResult.duplicateSubmissionsCount || duplicateCount) === 1 ? '' : 's'} preserved.
+                    </strong>{' '}
+                    Form re-submissions are recorded safely without duplicating main counts.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsVerifyModalOpen(false);
+                    setIsDuplicatesModalOpen(true);
+                  }}
+                  className="text-xs font-semibold text-black hover:underline shrink-0 bg-white border border-zinc-200 px-2.5 py-1 rounded-lg hover:bg-zinc-100 transition-colors"
+                >
+                  View Duplicates
+                </button>
+              </div>
+
               {/* Specific Missing Rows List (if any) */}
               {verifyResult.missingCount > 0 && (
                 <div className="space-y-2 pt-1">
@@ -1782,6 +1866,78 @@ export default function EventRegistrationPage() {
               </div>
             </>
           )}
+        </div>
+      </Modal>
+
+      {/* 9. Duplicate Submissions Inspection Modal */}
+      <Modal
+        isOpen={isDuplicatesModalOpen}
+        onClose={() => setIsDuplicatesModalOpen(false)}
+        title="Duplicate Form Submissions Log"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-700 space-y-1">
+            <p className="font-semibold text-zinc-900 text-xs flex items-center gap-1.5">
+              <Copy className="w-4 h-4 text-zinc-900" />
+              <span>Preserved Duplicate Submissions ({duplicateSubmissions.length})</span>
+            </p>
+            <p className="text-[11px] text-zinc-500 leading-relaxed">
+              When an attendee submits a Google Form or CSV multiple times, their initial submission remains the active registration. All subsequent duplicate submissions are safely stored below with their original match preserved.
+            </p>
+          </div>
+
+          {duplicatesLoading ? (
+            <div className="py-8 text-center text-zinc-500 text-xs">Loading duplicate submissions...</div>
+          ) : duplicateSubmissions.length === 0 ? (
+            <div className="py-8 text-center text-zinc-500 text-xs border border-dashed border-zinc-200 rounded-xl">
+              No duplicate form submissions recorded yet.
+            </div>
+          ) : (
+            <div className="max-h-72 overflow-y-auto border border-zinc-200 rounded-xl divide-y divide-zinc-100 bg-white">
+              {duplicateSubmissions.map((d) => (
+                <div key={d.id} className="p-3 space-y-1.5 hover:bg-zinc-50/80 transition-colors">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-zinc-900 text-xs">
+                        {d.full_name || <span className="text-zinc-400 font-normal">Unnamed Attendee</span>}
+                      </p>
+                      <p className="text-[11px] text-zinc-600 font-mono">
+                        {d.email || 'No Email'} {d.phone_number ? `• ${d.phone_number}` : ''}
+                        {d.gender || d.age ? ` • ${d.gender || 'Unspecified'}, ${d.age || 0} yrs` : ''}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] bg-zinc-100 text-zinc-800 border-zinc-200 shrink-0 capitalize">
+                      {d.source ? d.source.replace(/_/g, ' ') : 'Duplicate'}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] pt-1 text-zinc-500 border-t border-zinc-100">
+                    <span className="font-medium text-zinc-700">
+                      Matched Original:{' '}
+                      <strong className="text-zinc-900 font-semibold">
+                        {d.matched_original_name || d.matched_original_email || d.matched_original_phone || 'Original Registration'}
+                      </strong>
+                      {d.matched_original_email ? ` (${d.matched_original_email})` : ''}
+                    </span>
+                    <span className="font-mono text-[10px] text-zinc-400">
+                      Submitted: {new Date(d.submitted_at || d.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end pt-3 border-t border-zinc-100">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsDuplicatesModalOpen(false)}
+            >
+              Close
+            </Button>
+          </div>
         </div>
       </Modal>
     </div>

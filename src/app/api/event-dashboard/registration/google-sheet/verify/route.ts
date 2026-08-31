@@ -194,6 +194,13 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Query total recorded duplicate submissions for event
+      const dupesCountRes = await client.query(
+        `SELECT COUNT(*)::int AS count FROM public.registration_duplicate_submissions WHERE event_id = $1`,
+        [session.eventId]
+      );
+      const duplicateSubmissionsCount = dupesCountRes.rows[0]?.count || 0;
+
       const missingCount = missingRows.length;
       const isFullyReconciled = missingCount === 0;
 
@@ -203,6 +210,7 @@ export async function POST(req: NextRequest) {
       console.log(`[VERIFY SYNC RECONCILIATION] Total App DB Registrations: ${totalDbRegistrations}`);
       console.log(`[VERIFY SYNC RECONCILIATION] Matched Rows: ${matchedCount}`);
       console.log(`[VERIFY SYNC RECONCILIATION] Missing Rows Count: ${missingCount}`);
+      console.log(`[VERIFY SYNC RECONCILIATION] Duplicate Submissions Logged: ${duplicateSubmissionsCount}`);
       console.log(`[VERIFY SYNC RECONCILIATION] Fully Reconciled: ${isFullyReconciled}`);
       console.log(`================================================================\n`);
 
@@ -213,6 +221,7 @@ export async function POST(req: NextRequest) {
         matchedCount,
         missingCount,
         missingRows,
+        duplicateSubmissionsCount,
         isFullyReconciled,
       });
     } finally {
