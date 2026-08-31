@@ -747,7 +747,7 @@ export default function EventRegistrationPage() {
         return;
       }
 
-      setImportSuccessMessage(data.message || `Successfully imported ${csvPreviewRows.length} entries.`);
+      setImportSuccessMessage(data.message || `${csvPreviewRows.length} registrations imported`);
       setTimeout(() => {
         setIsImportOpen(false);
         fetchRegistrationData();
@@ -1518,11 +1518,11 @@ export default function EventRegistrationPage() {
             </div>
           )}
 
-          {/* Valid Rows Preview */}
+          {/* Rows Preview */}
           {csvPreviewRows.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-semibold text-zinc-800">
-                <span>Preview ({csvPreviewRows.length} valid rows ready for import)</span>
+                <span>Preview ({csvPreviewRows.length} rows will be imported)</span>
                 <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-200 text-[10px]">
                   Ready
                 </Badge>
