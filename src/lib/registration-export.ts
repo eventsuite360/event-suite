@@ -19,6 +19,12 @@ export interface ParsedRegistrationRow {
   email: string;
 }
 
+export function extractGoogleSheetId(url: string): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  return match ? match[1] : null;
+}
+
 // 1. Export Registrations to CSV
 export function exportRegistrationsToCSV(registrations: RegistrationItem[], filename = 'registrations.csv') {
   const headers = ['Full Name', 'Phone Number', 'Gender', 'Age', 'Email', 'Added By', 'Created At'];
@@ -177,11 +183,17 @@ export function parseCSVRegistrations(csvText: string): {
 
   const headerCells = parseCSVLine(lines[0]);
   const normalizedHeaders = headerCells.map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-  
-  // Find ALL matching column indices for candidate aliases
+
+  // Excluded / ignored header patterns
+  const ignoredPatterns = ['timestamp', 'column7', 'emailsent', 'column'];
+
+  // Find ALL matching column indices for candidate aliases while filtering ignored headers
   const findAllHeaderIndices = (aliases: string[]): number[] => {
     const indices: number[] = [];
     normalizedHeaders.forEach((h, idx) => {
+      if (ignoredPatterns.some((p) => h.startsWith(p) || h === p)) {
+        return;
+      }
       if (aliases.some((alias) => h === alias || h.includes(alias))) {
         indices.push(idx);
       }
@@ -194,16 +206,15 @@ export function parseCSVRegistrations(csvText: string): {
   const phoneIndices = findAllHeaderIndices(['phonenumber', 'phone_number', 'phone', 'mobile', 'contact', 'cell', 'whatsapp']);
   const genderIndices = findAllHeaderIndices(['gender', 'sex']);
   const ageIndices = findAllHeaderIndices(['age']);
-  const emailIndices = findAllHeaderIndices(['emailaddress', 'email_address', 'e-mail', 'email', 'mail']);
+  const emailIndices = findAllHeaderIndices(['emailaddress', 'email_address', 'email', 'e-mail', 'mail']).filter(
+    (idx) => !normalizedHeaders[idx].includes('sent')
+  );
 
   const errors: string[] = [];
   const missingHeaders: string[] = [];
 
   if (nameIndices.length === 0) missingHeaders.push('Full Name');
-  if (phoneIndices.length === 0) missingHeaders.push('Phone Number');
-  if (genderIndices.length === 0) missingHeaders.push('Gender');
-  if (ageIndices.length === 0) missingHeaders.push('Age');
-  if (emailIndices.length === 0) missingHeaders.push('Email / Email Address');
+  if (phoneIndices.length === 0 && emailIndices.length === 0) missingHeaders.push('Email or Phone Number');
 
   if (missingHeaders.length > 0) {
     return {
@@ -252,19 +263,15 @@ export function parseCSVRegistrations(csvText: string): {
       errors.push(`Row ${rowNum}: Full Name is missing.`);
       continue;
     }
-    if (!rawPhone) {
-      errors.push(`Row ${rowNum}: Phone Number is missing.`);
-      continue;
-    }
-    if (!rawEmail || !rawEmail.includes('@')) {
-      errors.push(`Row ${rowNum}: Valid Email is required.`);
+
+    if (!rawEmail && !rawPhone) {
+      errors.push(`Row ${rowNum}: Either Email or Phone Number is required.`);
       continue;
     }
 
     let parsedAge = parseInt(rawAge, 10);
     if (isNaN(parsedAge) || parsedAge < 0) {
-      errors.push(`Row ${rowNum}: Age must be a positive number (got "${rawAge}").`);
-      continue;
+      parsedAge = 0;
     }
 
     let normalizedGender = 'Other';
@@ -278,7 +285,7 @@ export function parseCSVRegistrations(csvText: string): {
       phone_number: rawPhone,
       gender: normalizedGender,
       age: parsedAge,
-      email: rawEmail.toLowerCase(),
+      email: rawEmail ? rawEmail.toLowerCase() : '',
     });
   }
 

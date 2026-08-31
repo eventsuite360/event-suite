@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS public.events (
     status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
     event_admin_email TEXT,
     event_admin_password TEXT,
+    google_sheet_url TEXT DEFAULT NULL,
+    google_sheet_last_synced_at TIMESTAMPTZ DEFAULT NULL,
     created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

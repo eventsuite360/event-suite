@@ -17,6 +17,10 @@ import {
   Calendar,
   CheckCircle2,
   XCircle,
+  RefreshCw,
+  Clock,
+  Link2,
+  ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -96,6 +100,37 @@ export default function EventRegistrationPage() {
   // Export Loading State
   const [exportLoading, setExportLoading] = useState(false);
 
+  // Google Sheet Integration States
+  const [googleSheetUrl, setGoogleSheetUrl] = useState<string | null>(null);
+  const [googleSheetLastSyncedAt, setGoogleSheetLastSyncedAt] = useState<string | null>(null);
+  const [isConnectSheetOpen, setIsConnectSheetOpen] = useState(false);
+  const [inputSheetUrl, setInputSheetUrl] = useState('');
+  const [sheetFormError, setSheetFormError] = useState<string | null>(null);
+  const [sheetActionLoading, setSheetActionLoading] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncToast, setSyncToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
+
+  // Helper for relative timestamp display
+  const formatTimeAgo = useCallback((dateStr: string | null) => {
+    if (!dateStr) return null;
+    try {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000);
+      if (diffSec < 30) return 'Just now';
+      if (diffSec < 60) return `${diffSec}s ago`;
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHours = Math.floor(diffMin / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays}d ago`;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // Fetch registrations fresh from Supabase via API with pagination
   const fetchRegistrationData = useCallback(async (targetPage = page) => {
     setLoading(true);
@@ -112,6 +147,12 @@ export default function EventRegistrationPage() {
         }
         setUserRole(data.userRole || '');
         setCurrentUserEmail(data.currentUserEmail || '');
+        if (data.googleSheetUrl !== undefined) {
+          setGoogleSheetUrl(data.googleSheetUrl);
+        }
+        if (data.googleSheetLastSyncedAt !== undefined) {
+          setGoogleSheetLastSyncedAt(data.googleSheetLastSyncedAt);
+        }
       } else {
         setFetchError(data.error || 'Failed to fetch registration entries.');
       }
@@ -206,6 +247,121 @@ export default function EventRegistrationPage() {
     setDeleteAllConfirmInput('');
     setFormError(null);
     setIsDeleteAllOpen(true);
+  };
+
+  // Google Sheet Integration Handlers
+  const openConnectSheetModal = () => {
+    setInputSheetUrl(googleSheetUrl || '');
+    setSheetFormError(null);
+    setIsConnectSheetOpen(true);
+  };
+
+  const handleConnectSheet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSheetFormError(null);
+
+    if (!inputSheetUrl.trim()) {
+      setSheetFormError('Please enter a Google Sheet shareable URL.');
+      return;
+    }
+
+    if (!inputSheetUrl.includes('/spreadsheets/d/')) {
+      setSheetFormError('Please enter a valid Google Sheets URL (e.g. https://docs.google.com/spreadsheets/d/...)');
+      return;
+    }
+
+    setSheetActionLoading(true);
+
+    try {
+      const res = await fetch('/api/event-dashboard/registration/google-sheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: inputSheetUrl.trim() }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setSheetFormError(data.error || 'Failed to save Google Sheet URL.');
+        setSheetActionLoading(false);
+        return;
+      }
+
+      setGoogleSheetUrl(data.googleSheetUrl);
+      setIsConnectSheetOpen(false);
+      setSyncToast({ type: 'success', message: 'Google Sheet connected successfully! Click "Sync Now" to import registrations.' });
+    } catch (err: any) {
+      setSheetFormError(err.message || 'An error occurred while connecting Google Sheet.');
+    } finally {
+      setSheetActionLoading(false);
+    }
+  };
+
+  const handleDisconnectSheet = async () => {
+    setSheetActionLoading(true);
+    try {
+      const res = await fetch('/api/event-dashboard/registration/google-sheet', {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || 'Failed to disconnect Google Sheet.');
+        setSheetActionLoading(false);
+        return;
+      }
+
+      setGoogleSheetUrl(null);
+      setGoogleSheetLastSyncedAt(null);
+      setIsDisconnectOpen(false);
+      setSyncToast({ type: 'success', message: 'Google Sheet disconnected successfully.' });
+    } catch (err: any) {
+      alert(err.message || 'An error occurred while disconnecting Google Sheet.');
+    } finally {
+      setSheetActionLoading(false);
+    }
+  };
+
+  const handleSyncNow = async () => {
+    if (syncLoading) return;
+    setSyncLoading(true);
+    setSyncToast(null);
+
+    try {
+      const res = await fetch('/api/event-dashboard/registration/google-sheet/sync', {
+        method: 'POST',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setSyncToast({
+          type: 'error',
+          message: data.error || "Couldn't access this sheet — make sure sharing is set to 'Anyone with the link can view'",
+        });
+        setSyncLoading(false);
+        return;
+      }
+
+      setSyncToast({
+        type: 'success',
+        message: data.message || `${data.newCount} new registrations added, ${data.skippedCount} already existed (skipped).`,
+      });
+
+      if (data.lastSyncedAt) {
+        setGoogleSheetLastSyncedAt(data.lastSyncedAt);
+      }
+
+      fetchRegistrationData();
+    } catch (err: any) {
+      setSyncToast({
+        type: 'error',
+        message: err.message || "Couldn't access this sheet — make sure sharing is set to 'Anyone with the link can view'",
+      });
+    } finally {
+      setSyncLoading(false);
+    }
   };
 
   // Submit Add
@@ -481,9 +637,41 @@ export default function EventRegistrationPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          {/* Admin Export & Import Buttons */}
+          {/* Admin Export, Import & Google Sheet Buttons */}
           {isAdmin && (
             <>
+              {/* Google Sheet Sync / Connect Button */}
+              {!googleSheetUrl ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={openConnectSheetModal}
+                  className="inline-flex items-center gap-1.5 bg-zinc-900 text-white hover:bg-zinc-800"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Connect Google Sheet</span>
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleSyncNow}
+                    disabled={syncLoading}
+                    isLoading={syncLoading}
+                    className="inline-flex items-center gap-1.5 bg-zinc-900 text-white hover:bg-zinc-800"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? 'animate-spin' : ''}`} />
+                    <span>{syncLoading ? 'Syncing...' : 'Sync Now'}</span>
+                  </Button>
+                  {googleSheetLastSyncedAt && (
+                    <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap bg-zinc-100 px-2 py-1 rounded-md border border-zinc-200">
+                      Last synced: {formatTimeAgo(googleSheetLastSyncedAt)}
+                    </span>
+                  )}
+                </div>
+              )}
+
               <Button
                 variant="secondary"
                 size="sm"
@@ -536,6 +724,71 @@ export default function EventRegistrationPage() {
           </Button>
         </div>
       </div>
+
+      {/* Toast Notification Banner for Google Sheet Sync & actions */}
+      {syncToast && (
+        <Card
+          className={`p-3 text-xs flex items-center justify-between gap-2 border shadow-xs transition-all ${
+            syncToast.type === 'success'
+              ? 'bg-zinc-900 text-white border-zinc-800'
+              : 'bg-red-50 text-red-700 border-red-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {syncToast.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+            )}
+            <span className="font-medium">{syncToast.message}</span>
+          </div>
+          <button
+            onClick={() => setSyncToast(null)}
+            className="text-xs opacity-70 hover:opacity-100 font-bold px-1.5 py-0.5 rounded"
+          >
+            ✕
+          </button>
+        </Card>
+      )}
+
+      {/* Connected Google Sheet Details Bar (Visible to Admin when connected) */}
+      {isAdmin && googleSheetUrl && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-zinc-50 border border-zinc-200 rounded-xl text-xs">
+          <div className="flex items-center gap-2 text-zinc-700 min-w-0">
+            <FileSpreadsheet className="w-4 h-4 text-zinc-900 shrink-0" />
+            <span className="font-semibold text-zinc-900 shrink-0">Connected Sheet:</span>
+            <a
+              href={googleSheetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-zinc-800 hover:text-black underline truncate max-w-[260px] sm:max-w-[400px] flex items-center gap-1"
+              title={googleSheetUrl}
+            >
+              <span>{googleSheetUrl}</span>
+              <ExternalLink className="w-3 h-3 shrink-0 inline opacity-60" />
+            </a>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openConnectSheetModal}
+              className="text-[11px] h-7 px-2.5"
+            >
+              Change
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsDisconnectOpen(true)}
+              className="text-[11px] h-7 px-2.5 text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
+            >
+              Disconnect
+            </Button>
+          </div>
+        </div>
+      )}
 
       {fetchError && (
         <Card className="p-4 bg-red-50 border-red-200 text-red-700 text-xs flex items-center gap-2">
@@ -1167,6 +1420,104 @@ export default function EventRegistrationPage() {
               className="bg-black text-white hover:bg-zinc-800 font-semibold"
             >
               {actionLoading ? 'Deleting All Registrations...' : 'Yes, Delete All Registrations'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 6. Connect / Change Google Sheet Modal */}
+      <Modal
+        isOpen={isConnectSheetOpen}
+        onClose={() => setIsConnectSheetOpen(false)}
+        title={googleSheetUrl ? 'Change Connected Google Sheet' : 'Connect Google Sheet'}
+      >
+        <form onSubmit={handleConnectSheet} className="space-y-4 text-xs">
+          {sheetFormError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+              <span>{sheetFormError}</span>
+            </div>
+          )}
+
+          <div className="p-3.5 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-600 space-y-1.5">
+            <p className="font-semibold text-zinc-900 flex items-center gap-1.5 text-xs">
+              <CheckCircle2 className="w-4 h-4 text-zinc-800 shrink-0" />
+              Setup Instructions:
+            </p>
+            <p className="text-[11px] leading-relaxed text-zinc-600">
+              Set your sheet&apos;s sharing to <strong className="text-zinc-900">&quot;Anyone with the link can view&quot;</strong> so we can read it.
+            </p>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-zinc-800 mb-1.5 text-xs">
+              Google Sheet Shareable URL <span className="text-red-500">*</span>
+            </label>
+            <Input
+              placeholder="https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZj..."
+              value={inputSheetUrl}
+              onChange={(e) => {
+                setInputSheetUrl(e.target.value);
+                setSheetFormError(null);
+              }}
+              className="text-xs font-mono"
+              required
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-zinc-100">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsConnectSheetOpen(false)}
+              disabled={sheetActionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              isLoading={sheetActionLoading}
+              disabled={sheetActionLoading}
+              className="bg-black text-white hover:bg-zinc-800"
+            >
+              {googleSheetUrl ? 'Update Connection' : 'Save & Connect'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* 7. Disconnect Google Sheet Confirmation Modal */}
+      <Modal
+        isOpen={isDisconnectOpen}
+        onClose={() => setIsDisconnectOpen(false)}
+        title="Disconnect Google Sheet"
+      >
+        <div className="space-y-4 text-xs">
+          <p className="text-zinc-600 leading-relaxed">
+            Are you sure you want to disconnect the Google Sheet for this event? Manual &quot;Sync Now&quot; will be disabled until a sheet is reconnected.
+          </p>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-zinc-100">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsDisconnectOpen(false)}
+              disabled={sheetActionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleDisconnectSheet}
+              isLoading={sheetActionLoading}
+              disabled={sheetActionLoading}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Disconnect Sheet
             </Button>
           </div>
         </div>

@@ -20,6 +20,8 @@ export interface EventItem {
   status: EventStatus;
   event_admin_email?: string | null;
   event_admin_password?: string | null;
+  google_sheet_url?: string | null;
+  google_sheet_last_synced_at?: string | null;
   created_by?: string | null;
   created_at: string;
   updated_at: string;

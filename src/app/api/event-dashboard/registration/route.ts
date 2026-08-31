@@ -97,6 +97,12 @@ export async function GET(req: NextRequest) {
         );
       }
 
+      const eventRes = await client.query(
+        `SELECT google_sheet_url, google_sheet_last_synced_at FROM public.events WHERE id = $1`,
+        [targetEventId]
+      );
+      const eventInfo = eventRes.rows[0] || {};
+
       const totalPages = Math.ceil(totalCount / limit) || 1;
 
       return NextResponse.json({
@@ -110,6 +116,8 @@ export async function GET(req: NextRequest) {
         },
         userRole: session.role,
         currentUserEmail: session.email,
+        googleSheetUrl: eventInfo.google_sheet_url || null,
+        googleSheetLastSyncedAt: eventInfo.google_sheet_last_synced_at || null,
       });
     } finally {
       await client.end();
