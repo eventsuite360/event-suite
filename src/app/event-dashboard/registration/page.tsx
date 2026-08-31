@@ -959,18 +959,30 @@ export default function EventRegistrationPage() {
 
                     return (
                       <tr key={r.id} className="hover:bg-zinc-50/80 transition-colors">
-                        <td className="py-3.5 px-4 font-semibold text-zinc-900">{r.full_name}</td>
-                        <td className="py-3.5 px-4 font-mono text-zinc-700">{r.phone_number}</td>
-                        <td className="py-3.5 px-4">
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] capitalize bg-zinc-50 text-zinc-800 border-zinc-200"
-                          >
-                            {r.gender}
-                          </Badge>
+                        <td className="py-3.5 px-4 font-semibold text-zinc-900">
+                          {r.full_name || <span className="text-zinc-400 font-normal">—</span>}
                         </td>
-                        <td className="py-3.5 px-4 font-mono text-zinc-700">{r.age} yrs</td>
-                        <td className="py-3.5 px-4 text-zinc-700">{r.email}</td>
+                        <td className="py-3.5 px-4 font-mono text-zinc-700">
+                          {r.phone_number || <span className="text-zinc-400 font-normal">—</span>}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          {r.gender ? (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] capitalize bg-zinc-50 text-zinc-800 border-zinc-200"
+                            >
+                              {r.gender}
+                            </Badge>
+                          ) : (
+                            <span className="text-zinc-400 font-mono">—</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-zinc-700">
+                          {r.age && r.age > 0 ? `${r.age} yrs` : <span className="text-zinc-400 font-normal">—</span>}
+                        </td>
+                        <td className="py-3.5 px-4 text-zinc-700">
+                          {r.email || <span className="text-zinc-400 font-normal">—</span>}
+                        </td>
 
                         {/* Added By column rendered ONLY for Admins */}
                         {isAdmin && (

@@ -170,6 +170,7 @@ export async function POST(req: NextRequest) {
 
       await client.query('BEGIN');
       let newCount = 0;
+      let newIncompleteCount = 0;
       let duplicateEmailCount = 0;
       let duplicatePhoneCount = 0;
       let duplicateTotalCount = 0;
@@ -205,18 +206,18 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        // Insert new registration
+        // Insert new registration with empty string defaults for missing text fields
         await client.query(
           `INSERT INTO public.registrations (
              event_id, full_name, phone_number, gender, age, email, created_by_user_id, created_by_user_name
            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
             session.eventId,
-            row.full_name.trim(),
-            cleanPhone || row.phone_number.trim(),
-            row.gender || 'Other',
+            row.full_name || '',
+            cleanPhone || row.phone_number || '',
+            row.gender || '',
             row.age || 0,
-            cleanEmail,
+            cleanEmail || '',
             session.email,
             creatorName,
           ]
@@ -226,6 +227,9 @@ export async function POST(req: NextRequest) {
         if (cleanPhone) existingRawPhones.add(cleanPhone);
         if (phoneDigits) existingPhoneDigits.add(phoneDigits);
         newCount++;
+        if (row.hasMissingFields) {
+          newIncompleteCount++;
+        }
       }
 
       // 5. Update google_sheet_last_synced_at timestamp on events table
@@ -240,7 +244,6 @@ export async function POST(req: NextRequest) {
       await client.query('COMMIT');
 
       const newTotalDBCount = existingDBCount + newCount;
-      const invalidCount = parseErrors.length;
 
       // --- SERVER SIDE LOGGING FOR SYNC DIAGNOSTICS ---
       console.log(`\n================================================================`);
@@ -248,34 +251,27 @@ export async function POST(req: NextRequest) {
       console.log(`[GOOGLE SHEET SYNC LOG] Google Sheet ID: ${sheetId}`);
       console.log(`[GOOGLE SHEET SYNC LOG] Total Data Rows in Google Sheet: ${totalDataRowsCount}`);
       console.log(`[GOOGLE SHEET SYNC LOG] Valid Parsed Rows: ${validRows.length}`);
-      console.log(`[GOOGLE SHEET SYNC LOG] Invalid Rows Count: ${invalidCount}`);
-      if (invalidCount > 0) {
-        parseErrors.forEach((err) => {
-          console.log(`[GOOGLE SHEET SYNC LOG]   - Invalid Row Detail: ${err}`);
-        });
-      }
       console.log(`[GOOGLE SHEET SYNC LOG] DB Registrations BEFORE Sync: ${existingDBCount}`);
       console.log(`[GOOGLE SHEET SYNC LOG] Duplicates Matched by Email: ${duplicateEmailCount}`);
       console.log(`[GOOGLE SHEET SYNC LOG] Duplicates Matched by Phone: ${duplicatePhoneCount}`);
       console.log(`[GOOGLE SHEET SYNC LOG] Total Duplicates Skipped: ${duplicateTotalCount}`);
-      console.log(`[GOOGLE SHEET SYNC LOG] New Registrations Inserted: ${newCount}`);
+      console.log(`[GOOGLE SHEET SYNC LOG] New Registrations Inserted: ${newCount} (${newIncompleteCount} with missing fields)`);
       console.log(`[GOOGLE SHEET SYNC LOG] DB Registrations AFTER Sync: ${newTotalDBCount}`);
       console.log(`================================================================\n`);
 
-      let summaryMessage = `${newCount} new registration${newCount === 1 ? '' : 's'} added, ${duplicateTotalCount} already existed (${duplicateEmailCount} by email, ${duplicatePhoneCount} by phone).`;
-      if (invalidCount > 0) {
-        summaryMessage = `${newCount} new added, ${duplicateTotalCount} already existed (${duplicateEmailCount} by email, ${duplicatePhoneCount} by phone), ${invalidCount} skipped due to invalid data.`;
+      let summaryMessage = `${newCount} new registration${newCount === 1 ? '' : 's'} added, ${duplicateTotalCount} already existed (duplicates).`;
+      if (newIncompleteCount > 0) {
+        summaryMessage = `${newCount} new registration${newCount === 1 ? '' : 's'} added (${newIncompleteCount} with missing fields), ${duplicateTotalCount} already existed (duplicates).`;
       }
 
       return NextResponse.json({
         success: true,
         totalSheetRows: totalDataRowsCount,
         newCount,
+        newIncompleteCount,
         skippedCount: duplicateTotalCount,
         duplicateEmailCount,
         duplicatePhoneCount,
-        invalidCount,
-        invalidReasons: parseErrors,
         message: summaryMessage,
         lastSyncedAt: nowIso,
       });

@@ -174,32 +174,83 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'No registrations provided for import.' }, { status: 400 });
         }
 
+        const existingRes = await client.query(
+          `SELECT lower(email) AS email, phone_number FROM public.registrations WHERE event_id = $1`,
+          [session.eventId]
+        );
+
+        const existingEmails = new Set<string>();
+        const existingPhones = new Set<string>();
+
+        for (const row of existingRes.rows) {
+          if (row.email) existingEmails.add(row.email.trim().toLowerCase());
+          if (row.phone_number) existingPhones.add(row.phone_number.trim().replace(/\D/g, ''));
+        }
+
         await client.query('BEGIN');
         let insertedCount = 0;
+        let newIncompleteCount = 0;
+        let skippedCount = 0;
 
         for (const item of items) {
-          const { full_name, phone_number, gender, age, email } = item;
-          if (!full_name || !phone_number || !gender || age === undefined || !email) {
+          const rawName = (item.full_name || '').trim();
+          const rawPhone = (item.phone_number || '').trim();
+          const rawGender = (item.gender || '').trim();
+          const rawEmail = (item.email || '').trim().toLowerCase();
+          const rawAge = item.age;
+
+          // Skip completely empty row
+          if (!rawName && !rawPhone && !rawGender && !rawEmail && (rawAge === undefined || rawAge === null || rawAge === '')) {
             continue;
           }
 
-          const parsedAge = parseInt(age, 10);
-          if (isNaN(parsedAge) || parsedAge < 0) continue;
+          const phoneDigits = rawPhone.replace(/\D/g, '');
+
+          let isDuplicate = false;
+          if (rawEmail && existingEmails.has(rawEmail)) {
+            isDuplicate = true;
+          } else if (!rawEmail && phoneDigits && existingPhones.has(phoneDigits)) {
+            isDuplicate = true;
+          }
+
+          if (isDuplicate) {
+            skippedCount++;
+            continue;
+          }
+
+          let parsedAge = parseInt(rawAge, 10);
+          if (isNaN(parsedAge) || parsedAge < 0) {
+            parsedAge = 0;
+          }
 
           await client.query(
             `INSERT INTO public.registrations (
                event_id, full_name, phone_number, gender, age, email, created_by_user_id, created_by_user_name
              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [session.eventId, full_name.trim(), phone_number.trim(), gender.trim(), parsedAge, email.trim(), session.email, creatorName]
+            [session.eventId, rawName, rawPhone, rawGender, parsedAge, rawEmail, session.email, creatorName]
           );
+
+          if (rawEmail) existingEmails.add(rawEmail);
+          if (phoneDigits) existingPhones.add(phoneDigits);
+
           insertedCount++;
+          if (!rawName || !rawEmail || !rawPhone || !rawGender || !rawAge) {
+            newIncompleteCount++;
+          }
         }
 
         await client.query('COMMIT');
 
+        let message = `Successfully imported ${insertedCount} registrations, ${skippedCount} already existed (duplicates).`;
+        if (newIncompleteCount > 0) {
+          message = `Successfully imported ${insertedCount} registrations (${newIncompleteCount} with missing fields), ${skippedCount} already existed (duplicates).`;
+        }
+
         return NextResponse.json({
-          message: `Successfully imported ${insertedCount} registrations.`,
+          message,
           count: insertedCount,
+          skippedCount,
+          incompleteCount: newIncompleteCount,
         });
       }
 

@@ -17,6 +17,7 @@ export interface ParsedRegistrationRow {
   gender: string;
   age: number;
   email: string;
+  hasMissingFields?: boolean;
 }
 
 export function extractGoogleSheetId(url: string): string | null {
@@ -247,18 +248,6 @@ export function parseCSVRegistrations(csvText: string): {
   );
 
   const errors: string[] = [];
-  const missingHeaders: string[] = [];
-
-  if (nameIndices.length === 0) missingHeaders.push('Full Name');
-  if (phoneIndices.length === 0 && emailIndices.length === 0) missingHeaders.push('Email or Phone Number');
-
-  if (missingHeaders.length > 0) {
-    return {
-      validRows: [],
-      errors: [`Missing required column headers: ${missingHeaders.join(', ')}. Please check your CSV header row.`],
-      totalDataRowsCount: Math.max(0, records.length - 1),
-    };
-  }
 
   // Helper to extract first non-empty cell value from candidate column indices
   const getFirstNonEmptyCell = (cells: string[], indices: number[]): string => {
@@ -286,7 +275,12 @@ export function parseCSVRegistrations(csvText: string): {
 
   for (let i = 0; i < dataRecords.length; i++) {
     const cells = dataRecords[i];
-    const rowNum = i + 2; // +1 for 1-index header, +1 for 1-index row count in sheet
+
+    // Skip ONLY completely empty rows (where every cell is empty)
+    const isCompletelyEmpty = cells.every((c) => !c || !c.trim());
+    if (isCompletelyEmpty) {
+      continue;
+    }
 
     const rawName = getFirstNonEmptyCell(cells, nameIndices);
     const rawPhone = getFirstNonEmptyCell(cells, phoneIndices);
@@ -297,33 +291,26 @@ export function parseCSVRegistrations(csvText: string): {
     const cleanEmail = rawEmail ? rawEmail.trim().toLowerCase() : '';
     const cleanPhone = normalizePhoneNumber(rawPhone);
 
-    if (!rawName) {
-      errors.push(`Row ${rowNum}: Full Name is missing.`);
-      continue;
-    }
-
-    if (!cleanEmail && !cleanPhone) {
-      errors.push(`Row ${rowNum}: Either Email or Phone Number is required.`);
-      continue;
-    }
-
     let parsedAge = parseInt(rawAge, 10);
     if (isNaN(parsedAge) || parsedAge < 0) {
       parsedAge = 0;
     }
 
-    let normalizedGender = 'Other';
+    let normalizedGender = '';
     const lowerGender = rawGender.toLowerCase();
     if (lowerGender.startsWith('m')) normalizedGender = 'Male';
     else if (lowerGender.startsWith('f')) normalizedGender = 'Female';
     else if (rawGender.trim()) normalizedGender = rawGender.trim();
 
+    const hasMissingFields = !rawName.trim() || !cleanEmail || !cleanPhone || !rawGender.trim() || !rawAge.trim();
+
     validRows.push({
-      full_name: rawName,
+      full_name: rawName.trim(),
       phone_number: cleanPhone || rawPhone.trim(),
       gender: normalizedGender,
       age: parsedAge,
       email: cleanEmail,
+      hasMissingFields,
     });
   }
 
