@@ -241,9 +241,9 @@ export async function POST(req: NextRequest) {
 
         await client.query('COMMIT');
 
-        let message = `Successfully imported ${insertedCount} registrations, ${skippedCount} already existed (duplicates).`;
-        if (newIncompleteCount > 0) {
-          message = `Successfully imported ${insertedCount} registrations (${newIncompleteCount} with missing fields), ${skippedCount} already existed (duplicates).`;
+        let message = `${insertedCount} new registration${insertedCount === 1 ? '' : 's'} added.`;
+        if (skippedCount > 0) {
+          message = `${insertedCount} new registration${insertedCount === 1 ? '' : 's'} added, ${skippedCount} duplicate${skippedCount === 1 ? '' : 's'} skipped (already existed).`;
         }
 
         return NextResponse.json({

@@ -1542,11 +1542,11 @@ export default function EventRegistrationPage() {
                   <tbody className="divide-y divide-zinc-100">
                     {csvPreviewRows.map((row, idx) => (
                       <tr key={idx} className="hover:bg-zinc-50">
-                        <td className="p-2 font-medium">{row.full_name}</td>
-                        <td className="p-2">{row.phone_number}</td>
-                        <td className="p-2">{row.gender}</td>
-                        <td className="p-2">{row.age}</td>
-                        <td className="p-2">{row.email}</td>
+                        <td className="p-2 font-medium">{row.full_name || <span className="text-zinc-400 font-normal">—</span>}</td>
+                        <td className="p-2">{row.phone_number || <span className="text-zinc-400 font-normal">—</span>}</td>
+                        <td className="p-2">{row.gender || <span className="text-zinc-400 font-normal">—</span>}</td>
+                        <td className="p-2">{row.age && row.age > 0 ? row.age : <span className="text-zinc-400 font-normal">—</span>}</td>
+                        <td className="p-2">{row.email || <span className="text-zinc-400 font-normal">—</span>}</td>
                       </tr>
                     ))}
                   </tbody>
