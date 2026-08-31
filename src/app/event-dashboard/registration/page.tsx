@@ -21,6 +21,8 @@ import {
   Clock,
   Link2,
   ExternalLink,
+  ShieldCheck,
+  CheckCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -110,6 +112,26 @@ export default function EventRegistrationPage() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncToast, setSyncToast] = useState<{ type: 'success' | 'error'; message: string; details?: string[] } | null>(null);
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
+
+  // Sync Verification States
+  const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [importMissingLoading, setImportMissingLoading] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<{
+    totalSheetRows: number;
+    totalDbRegistrations: number;
+    matchedCount: number;
+    missingCount: number;
+    missingRows: Array<{
+      sheetLine: number;
+      full_name: string;
+      phone_number: string;
+      email: string;
+      gender: string;
+      age: number;
+    }>;
+    isFullyReconciled: boolean;
+  } | null>(null);
 
   // Helper for relative timestamp display
   const formatTimeAgo = useCallback((dateStr: string | null) => {
@@ -362,6 +384,88 @@ export default function EventRegistrationPage() {
       });
     } finally {
       setSyncLoading(false);
+    }
+  };
+
+  const handleVerifySync = async () => {
+    if (verifyLoading) return;
+    setVerifyLoading(true);
+    setVerifyResult(null);
+
+    try {
+      const res = await fetch('/api/event-dashboard/registration/google-sheet/verify', {
+        method: 'POST',
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setSyncToast({
+          type: 'error',
+          message: data.error || "Couldn't perform sync verification.",
+        });
+        setVerifyLoading(false);
+        return;
+      }
+
+      setVerifyResult(data);
+      setIsVerifyModalOpen(true);
+    } catch (err: any) {
+      setSyncToast({
+        type: 'error',
+        message: err.message || 'An error occurred during sync verification.',
+      });
+    } finally {
+      setVerifyLoading(false);
+    }
+  };
+
+  const handleImportMissingOnly = async () => {
+    if (!verifyResult || verifyResult.missingRows.length === 0 || importMissingLoading) return;
+    setImportMissingLoading(true);
+
+    try {
+      const res = await fetch('/api/event-dashboard/registration/google-sheet/import-missing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: verifyResult.missingRows }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || 'Failed to import missing registrations.');
+        setImportMissingLoading(false);
+        return;
+      }
+
+      setSyncToast({
+        type: 'success',
+        message: data.message || `Successfully imported ${verifyResult.missingRows.length} missing registrations.`,
+      });
+
+      if (data.lastSyncedAt) {
+        setGoogleSheetLastSyncedAt(data.lastSyncedAt);
+      }
+
+      setVerifyResult((prev) =>
+        prev
+          ? {
+              ...prev,
+              totalDbRegistrations: prev.totalDbRegistrations + prev.missingCount,
+              matchedCount: prev.matchedCount + prev.missingCount,
+              missingCount: 0,
+              missingRows: [],
+              isFullyReconciled: true,
+            }
+          : null
+      );
+
+      fetchRegistrationData();
+    } catch (err: any) {
+      alert(err.message || 'An error occurred while importing missing registrations.');
+    } finally {
+      setImportMissingLoading(false);
     }
   };
 
@@ -658,13 +762,27 @@ export default function EventRegistrationPage() {
                     variant="secondary"
                     size="sm"
                     onClick={handleSyncNow}
-                    disabled={syncLoading}
+                    disabled={syncLoading || verifyLoading}
                     isLoading={syncLoading}
                     className="inline-flex items-center gap-1.5 bg-zinc-900 text-white hover:bg-zinc-800"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? 'animate-spin' : ''}`} />
                     <span>{syncLoading ? 'Syncing...' : 'Sync Now'}</span>
                   </Button>
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleVerifySync}
+                    disabled={verifyLoading || syncLoading}
+                    isLoading={verifyLoading}
+                    className="inline-flex items-center gap-1.5 bg-zinc-900 text-white hover:bg-zinc-800"
+                    title="Audit Google Sheet against App database registrations with visible proof"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{verifyLoading ? 'Verifying...' : 'Verify Sync'}</span>
+                  </Button>
+
                   {googleSheetLastSyncedAt && (
                     <span className="text-[11px] text-zinc-500 font-medium whitespace-nowrap bg-zinc-100 px-2 py-1 rounded-md border border-zinc-200">
                       Last synced: {formatTimeAgo(googleSheetLastSyncedAt)}
@@ -1545,6 +1663,125 @@ export default function EventRegistrationPage() {
               Disconnect Sheet
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* 8. Sync Verification & Data Reconciliation Modal */}
+      <Modal
+        isOpen={isVerifyModalOpen}
+        onClose={() => setIsVerifyModalOpen(false)}
+        title="Sync Verification & Data Reconciliation"
+      >
+        <div className="space-y-4 text-xs">
+          {verifyResult && (
+            <>
+              {/* Reconciliation Status Badge Banner */}
+              <div
+                className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
+                  verifyResult.isFullyReconciled
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-amber-50 border-amber-200 text-amber-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  {verifyResult.isFullyReconciled ? (
+                    <CheckCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                  )}
+                  <div>
+                    <p className="font-bold text-xs">
+                      {verifyResult.isFullyReconciled
+                        ? '100% Reconciled — All Sheet Rows Exist in App'
+                        : `${verifyResult.missingCount} Sheet Row${verifyResult.missingCount === 1 ? '' : 's'} Missing in App`}
+                    </p>
+                    <p className="text-[11px] opacity-85 mt-0.5 leading-relaxed">
+                      {verifyResult.isFullyReconciled
+                        ? 'Every row in your connected Google Sheet is verified and present in your app registrations.'
+                        : 'The entries below exist in your Google Sheet but have not been imported into the app yet.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Summary Stats Grid */}
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg">
+                  <span className="block text-[11px] text-zinc-500 font-medium">Sheet Total Rows</span>
+                  <span className="text-base font-bold font-mono text-zinc-900">{verifyResult.totalSheetRows}</span>
+                </div>
+                <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg">
+                  <span className="block text-[11px] text-zinc-500 font-medium">App Registrations</span>
+                  <span className="text-base font-bold font-mono text-zinc-900">{verifyResult.totalDbRegistrations}</span>
+                </div>
+                <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg">
+                  <span className="block text-[11px] text-zinc-500 font-medium">Missing Rows</span>
+                  <span
+                    className={`text-base font-bold font-mono ${
+                      verifyResult.missingCount > 0 ? 'text-amber-600' : 'text-emerald-600'
+                    }`}
+                  >
+                    {verifyResult.missingCount}
+                  </span>
+                </div>
+              </div>
+
+              {/* Specific Missing Rows List (if any) */}
+              {verifyResult.missingCount > 0 && (
+                <div className="space-y-2 pt-1">
+                  <p className="font-semibold text-zinc-900 flex items-center justify-between text-xs">
+                    <span>Specific Missing Entries ({verifyResult.missingCount}):</span>
+                    <span className="text-[11px] font-normal text-zinc-500">Un-imported rows from Sheet</span>
+                  </p>
+                  <div className="max-h-52 overflow-y-auto border border-zinc-200 rounded-xl divide-y divide-zinc-100 bg-white">
+                    {verifyResult.missingRows.map((m, idx) => (
+                      <div key={idx} className="p-2.5 flex items-center justify-between text-xs hover:bg-zinc-50">
+                        <div className="space-y-0.5">
+                          <p className="font-semibold text-zinc-900 flex items-center gap-1.5">
+                            <span className="font-mono text-[10px] bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-600 border border-zinc-200">
+                              Row {m.sheetLine}
+                            </span>
+                            <span>{m.full_name || 'Unnamed Attendee'}</span>
+                          </p>
+                          <p className="text-[11px] text-zinc-500 font-mono">
+                            {m.email ? m.email : 'No Email'} {m.phone_number ? `• ${m.phone_number}` : ''}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
+                          Missing in App
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-3 border-t border-zinc-100">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsVerifyModalOpen(false)}
+                >
+                  Close
+                </Button>
+
+                {verifyResult.missingCount > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleImportMissingOnly}
+                    isLoading={importMissingLoading}
+                    disabled={importMissingLoading}
+                    className="bg-black text-white hover:bg-zinc-800 font-semibold"
+                  >
+                    {importMissingLoading ? 'Importing Missing...' : `Import Missing Only (${verifyResult.missingCount})`}
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </div>
