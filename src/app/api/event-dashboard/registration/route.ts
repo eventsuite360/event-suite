@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
              COUNT(*) FILTER (WHERE lower(gender) IN ('male', 'm'))::int AS male,
              COUNT(*) FILTER (WHERE lower(gender) IN ('female', 'f'))::int AS female,
              COUNT(*) FILTER (WHERE lower(gender) NOT IN ('male', 'm', 'female', 'f'))::int AS other,
-             COUNT(*) FILTER (WHERE age <= 18)::int AS age_0_18,
+             COUNT(*) FILTER (WHERE age > 0 AND age <= 18)::int AS age_0_18,
              COUNT(*) FILTER (WHERE age > 18 AND age <= 30)::int AS age_19_30,
              COUNT(*) FILTER (WHERE age > 30 AND age <= 45)::int AS age_31_45,
              COUNT(*) FILTER (WHERE age > 45)::int AS age_46_plus
@@ -214,32 +214,27 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Single Registration Insert
+      // Single Registration Insert (All fields optional)
       const { full_name, phone_number, gender, age, email } = body;
 
-      if (!full_name || !full_name.trim()) {
-        return NextResponse.json({ error: 'Full Name is required.' }, { status: 400 });
+      const cleanName = (full_name || '').trim();
+      const cleanPhone = (phone_number || '').trim();
+      const cleanGender = (gender || '').trim();
+      let parsedAge = 0;
+      if (age !== undefined && age !== null && age !== '') {
+        const num = parseInt(age, 10);
+        if (!isNaN(num) && num >= 0) {
+          parsedAge = num;
+        }
       }
-      if (!phone_number || !phone_number.trim()) {
-        return NextResponse.json({ error: 'Phone Number is required.' }, { status: 400 });
-      }
-      if (!gender || !['Male', 'Female', 'Other'].includes(gender)) {
-        return NextResponse.json({ error: 'Gender must be Male, Female, or Other.' }, { status: 400 });
-      }
-      const parsedAge = parseInt(age, 10);
-      if (isNaN(parsedAge) || parsedAge < 0) {
-        return NextResponse.json({ error: 'Age must be a valid non-negative number.' }, { status: 400 });
-      }
-      if (!email || !email.trim() || !email.includes('@')) {
-        return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
-      }
+      const cleanEmail = (email || '').trim().toLowerCase();
 
       const insertRes = await client.query(
         `INSERT INTO public.registrations (
            event_id, full_name, phone_number, gender, age, email, created_by_user_id, created_by_user_name
          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [session.eventId, full_name.trim(), phone_number.trim(), gender, parsedAge, email.trim().toLowerCase(), session.email, creatorName]
+        [session.eventId, cleanName, cleanPhone, cleanGender, parsedAge, cleanEmail, session.email, creatorName]
       );
 
       return NextResponse.json({
@@ -272,22 +267,18 @@ export async function PUT(req: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: 'Registration ID is required.' }, { status: 400 });
     }
-    if (!full_name || !full_name.trim()) {
-      return NextResponse.json({ error: 'Full Name is required.' }, { status: 400 });
+
+    const cleanName = (full_name || '').trim();
+    const cleanPhone = (phone_number || '').trim();
+    const cleanGender = (gender || '').trim();
+    let parsedAge = 0;
+    if (age !== undefined && age !== null && age !== '') {
+      const num = parseInt(age, 10);
+      if (!isNaN(num) && num >= 0) {
+        parsedAge = num;
+      }
     }
-    if (!phone_number || !phone_number.trim()) {
-      return NextResponse.json({ error: 'Phone Number is required.' }, { status: 400 });
-    }
-    if (!gender || !['Male', 'Female', 'Other'].includes(gender)) {
-      return NextResponse.json({ error: 'Gender must be Male, Female, or Other.' }, { status: 400 });
-    }
-    const parsedAge = parseInt(age, 10);
-    if (isNaN(parsedAge) || parsedAge < 0) {
-      return NextResponse.json({ error: 'Age must be a valid non-negative number.' }, { status: 400 });
-    }
-    if (!email || !email.trim() || !email.includes('@')) {
-      return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
-    }
+    const cleanEmail = (email || '').trim().toLowerCase();
 
     const client = getPgClient();
     await client.connect();
@@ -312,7 +303,7 @@ export async function PUT(req: NextRequest) {
         `UPDATE public.registrations
          SET full_name = $1, phone_number = $2, gender = $3, age = $4, email = $5, updated_at = NOW()
          WHERE id = $6 AND event_id = $7`,
-        [full_name.trim(), phone_number.trim(), gender, parsedAge, email.trim().toLowerCase(), id, session.eventId]
+        [cleanName, cleanPhone, cleanGender, parsedAge, cleanEmail, id, session.eventId]
       );
 
       return NextResponse.json({ message: 'Registration updated successfully' });

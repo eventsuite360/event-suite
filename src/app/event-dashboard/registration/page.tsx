@@ -517,31 +517,17 @@ export default function EventRegistrationPage() {
     }
   };
 
-  // Submit Add
+  // Submit Add (All fields optional)
   const handleAddRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
-    if (!formData.full_name.trim()) {
-      setFormError('Full Name is required.');
-      return;
-    }
-    if (!formData.phone_number.trim()) {
-      setFormError('Phone Number is required.');
-      return;
-    }
-    if (!formData.gender) {
-      setFormError('Gender is required.');
-      return;
-    }
-    const numAge = parseInt(formData.age, 10);
-    if (isNaN(numAge) || numAge < 0) {
-      setFormError('Please enter a valid age.');
-      return;
-    }
-    if (!formData.email.trim() || !formData.email.includes('@')) {
-      setFormError('Please enter a valid email address.');
-      return;
+    let numAge = 0;
+    if (formData.age && formData.age.trim()) {
+      const parsed = parseInt(formData.age, 10);
+      if (!isNaN(parsed) && parsed >= 0) {
+        numAge = parsed;
+      }
     }
 
     setActionLoading(true);
@@ -553,7 +539,7 @@ export default function EventRegistrationPage() {
         body: JSON.stringify({
           full_name: formData.full_name.trim(),
           phone_number: formData.phone_number.trim(),
-          gender: formData.gender,
+          gender: formData.gender || '',
           age: numAge,
           email: formData.email.trim(),
         }),
@@ -576,33 +562,19 @@ export default function EventRegistrationPage() {
     }
   };
 
-  // Submit Edit
+  // Submit Edit (All fields optional)
   const handleEditRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEntry) return;
 
     setFormError(null);
 
-    if (!formData.full_name.trim()) {
-      setFormError('Full Name is required.');
-      return;
-    }
-    if (!formData.phone_number.trim()) {
-      setFormError('Phone Number is required.');
-      return;
-    }
-    if (!formData.gender) {
-      setFormError('Gender is required.');
-      return;
-    }
-    const numAge = parseInt(formData.age, 10);
-    if (isNaN(numAge) || numAge < 0) {
-      setFormError('Please enter a valid age.');
-      return;
-    }
-    if (!formData.email.trim() || !formData.email.includes('@')) {
-      setFormError('Please enter a valid email address.');
-      return;
+    let numAge = 0;
+    if (formData.age && formData.age.trim()) {
+      const parsed = parseInt(formData.age, 10);
+      if (!isNaN(parsed) && parsed >= 0) {
+        numAge = parsed;
+      }
     }
 
     setActionLoading(true);
@@ -615,7 +587,7 @@ export default function EventRegistrationPage() {
           id: selectedEntry.id,
           full_name: formData.full_name.trim(),
           phone_number: formData.phone_number.trim(),
-          gender: formData.gender,
+          gender: formData.gender || '',
           age: numAge,
           email: formData.email.trim(),
         }),
@@ -1259,10 +1231,9 @@ export default function EventRegistrationPage() {
 
           <div>
             <label className="block text-xs font-semibold text-zinc-800 mb-1">
-              Full Name <span className="text-red-500">*</span>
+              Full Name <span className="text-zinc-400 font-normal">(Optional)</span>
             </label>
             <Input
-              required
               placeholder="e.g. John Doe"
               value={formData.full_name}
               onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
@@ -1273,10 +1244,9 @@ export default function EventRegistrationPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-zinc-800 mb-1">
-                Phone Number <span className="text-red-500">*</span>
+                Phone Number <span className="text-zinc-400 font-normal">(Optional)</span>
               </label>
               <Input
-                required
                 placeholder="e.g. +1 555-0199"
                 value={formData.phone_number}
                 onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
@@ -1286,7 +1256,7 @@ export default function EventRegistrationPage() {
 
             <div>
               <label className="block text-xs font-semibold text-zinc-800 mb-1">
-                Gender <span className="text-red-500">*</span>
+                Gender <span className="text-zinc-400 font-normal">(Optional)</span>
               </label>
               <select
                 value={formData.gender}
@@ -1303,11 +1273,10 @@ export default function EventRegistrationPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-zinc-800 mb-1">
-                Age <span className="text-red-500">*</span>
+                Age <span className="text-zinc-400 font-normal">(Optional)</span>
               </label>
               <Input
                 type="number"
-                required
                 min="0"
                 placeholder="e.g. 28"
                 value={formData.age}
@@ -1318,11 +1287,10 @@ export default function EventRegistrationPage() {
 
             <div>
               <label className="block text-xs font-semibold text-zinc-800 mb-1">
-                Email Address <span className="text-red-500">*</span>
+                Email Address <span className="text-zinc-400 font-normal">(Optional)</span>
               </label>
               <Input
                 type="email"
-                required
                 placeholder="e.g. john@example.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -1358,9 +1326,10 @@ export default function EventRegistrationPage() {
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-800 mb-1">Full Name</label>
+            <label className="block text-xs font-semibold text-zinc-800 mb-1">
+              Full Name <span className="text-zinc-400 font-normal">(Optional)</span>
+            </label>
             <Input
-              required
               value={formData.full_name}
               onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
               className="text-xs"
@@ -1369,9 +1338,10 @@ export default function EventRegistrationPage() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-zinc-800 mb-1">Phone Number</label>
+              <label className="block text-xs font-semibold text-zinc-800 mb-1">
+                Phone Number <span className="text-zinc-400 font-normal">(Optional)</span>
+              </label>
               <Input
-                required
                 value={formData.phone_number}
                 onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
                 className="text-xs"
@@ -1379,7 +1349,9 @@ export default function EventRegistrationPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-zinc-800 mb-1">Gender</label>
+              <label className="block text-xs font-semibold text-zinc-800 mb-1">
+                Gender <span className="text-zinc-400 font-normal">(Optional)</span>
+              </label>
               <select
                 value={formData.gender}
                 onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
@@ -1394,10 +1366,11 @@ export default function EventRegistrationPage() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-zinc-800 mb-1">Age</label>
+              <label className="block text-xs font-semibold text-zinc-800 mb-1">
+                Age <span className="text-zinc-400 font-normal">(Optional)</span>
+              </label>
               <Input
                 type="number"
-                required
                 min="0"
                 value={formData.age}
                 onChange={(e) => setFormData({ ...formData, age: e.target.value })}
@@ -1406,10 +1379,11 @@ export default function EventRegistrationPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-zinc-800 mb-1">Email</label>
+              <label className="block text-xs font-semibold text-zinc-800 mb-1">
+                Email Address <span className="text-zinc-400 font-normal">(Optional)</span>
+              </label>
               <Input
                 type="email"
-                required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="text-xs"
